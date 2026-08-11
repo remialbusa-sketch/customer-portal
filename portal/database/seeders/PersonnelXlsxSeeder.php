@@ -20,6 +20,9 @@
  * Run with:
  *     php artisan db:seed --class=PersonnelXlsxSeeder
  *
+ * Dry run (recommended first — prints every change without touching rows):
+ *     PERSONNEL_SYNC_DRY_RUN=1 php artisan db:seed --class=PersonnelXlsxSeeder
+ *
  * Idempotent: re-running is safe; matched users are updated, no new
  * rows for already-matched names.
  */
@@ -163,7 +166,9 @@ class PersonnelXlsxSeeder extends Seeder
             $candidates[] = "{$firstSlug}{$withPart}@mcbtsi.com";
         }
 
-        return array_values(array_unique(array_filter($candidates)));
+        return array_values(array_unique(array_filter(
+            array_map(fn (string $e) => preg_replace('/\s+/', '', $e), $candidates)
+        )));
     }
 
     /**
@@ -230,6 +235,15 @@ class PersonnelXlsxSeeder extends Seeder
 
     public function run(): void
     {
+        // PERSONNEL_SYNC_DRY_RUN=1: report every change without writing
+        // (safe to run against production data; nothing is modified).
+        // Env var, not a CLI flag, because `db:seed` swallows unknown
+        // options into the --class argument.
+        $dryRun = (env('PERSONNEL_SYNC_DRY_RUN') === '1');
+        if ($dryRun) {
+            $this->command?->warn('DRY RUN — no rows will be written.');
+        }
+
         $xlsxPath = base_path('..' . DIRECTORY_SEPARATOR . 'Personnel list_.xlsx');
         if (! is_readable($xlsxPath)) {
             $this->command?->error("XLSX not readable at: {$xlsxPath}");
@@ -361,12 +375,20 @@ class PersonnelXlsxSeeder extends Seeder
                 if ($matched->team !== $t['team']) {
                     $changes['team'] = $t['team'];
                 }
-                if ($matched->role !== $t['role']) {
+                // Never reclassify admin/superadmin accounts from the
+                // roster — it would lock the account owner out of the
+                // admin area.
+                if (! in_array($matched->role, ['admin', 'superadmin'], true)
+                    && $matched->role !== $t['role']) {
                     $changes['role'] = $t['role'];
                 }
                 if (!empty($changes)) {
-                    $matched->update($changes);
-                    $this->command?->info("  updated: {$matched->name} (#{$matched->id}) -> " . json_encode($changes));
+                    if ($dryRun) {
+                        $this->command?->info("  WOULD update: {$matched->name} (#{$matched->id}) -> " . json_encode($changes));
+                    } else {
+                        $matched->update($changes);
+                        $this->command?->info("  updated: {$matched->name} (#{$matched->id}) -> " . json_encode($changes));
+                    }
                     $updated++;
                 } else {
                     $unchanged++;
@@ -390,6 +412,12 @@ class PersonnelXlsxSeeder extends Seeder
                 continue;
             }
 
+            if ($dryRun) {
+                $this->command?->info("  WOULD create: {$t['portal_name']} ({$email}) -> region={$t['region']} team={$t['team']} role={$t['role']}");
+                $created++;
+                continue;
+            }
+
             $u = User::create([
                 'name'     => $t['portal_name'],
                 'email'    => $email,
@@ -403,6 +431,7 @@ class PersonnelXlsxSeeder extends Seeder
             $created++;
         }
 
-        $this->command?->info("Done. created={$created} updated={$updated} unchanged={$unchanged} skipped={$manual}");
+        $this->command?->info("Done. created={$created} updated={$updated} unchanged={$unchanged} skipped={$manual}"
+            . ($dryRun ? ' (dry run — nothing written)' : ''));
     }
 }
