@@ -56,7 +56,11 @@ class AuthenticationTest extends TestCase
 
     public function test_navigation_menu_can_be_rendered(): void
     {
-        $user = User::factory()->create();
+        // Role must be set explicitly: the factory insert skips the column,
+        // so the in-memory model's `role` attribute is NULL (SQLite applies
+        // the DB default only on the stored row). The role middleware reads
+        // `$user->role` from the model, so NULL aborts 403.
+        $user = User::factory()->create(['role' => 'customer']);
 
         $this->actingAs($user);
 

@@ -20,8 +20,10 @@ class ProfileTest extends TestCase
         $response
             ->assertOk()
             ->assertSeeVolt('profile.update-profile-information-form')
-            ->assertSeeVolt('profile.update-password-form')
-            ->assertSeeVolt('profile.delete-user-form');
+            ->assertSeeVolt('profile.update-password-form');
+        // NOTE: the old `profile.delete-user-form` Volt component is gone —
+        // account deletion was redesigned as a request + superadmin-approval
+        // flow (ProfileDeletionRequestController), covered by its own tests.
     }
 
     public function test_profile_information_can_be_updated(): void
