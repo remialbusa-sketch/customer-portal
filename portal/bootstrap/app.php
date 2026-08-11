@@ -17,6 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\EnsureUserHasRole::class,
         ]);
 
+        // ETag/304 short-circuit for revisits. Skipped on
+        // POST + the explicit deltas listed in SetResponseETag
+        // (chat poll, TSR status, etc.).
+        $middleware->append(\App\Http\Middleware\SetResponseETag::class);
+
         // Trust the ngrok reverse proxy (or any other reverse proxy in
         // dev) so that $request->isSecure(), $request->getHost() and
         // the signed-URL machinery pick up the public scheme/host

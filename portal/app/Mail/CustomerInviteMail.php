@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace App\Mail;
 
 use App\Models\CustomerInvite;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
@@ -23,10 +21,17 @@ use Illuminate\Queue\SerializesModels;
  *
  * The actual URL is the only dynamic piece; it's signed by the
  * CustomerInvite token and is what the recipient clicks.
+ *
+ * NOTE: this mailable is intentionally NOT `ShouldQueue` because the
+ * cPanel shared-hosting target has no queue worker. Sending the mail
+ * synchronously via the configured SMTP driver (Gmail by default) is
+ * fast enough for a single invite send and avoids the silent "queued
+ * forever" failure mode that would otherwise hit when no `jobs:work`
+ * is running.
  */
 class CustomerInviteMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     public function __construct(
         public readonly CustomerInvite $invite,

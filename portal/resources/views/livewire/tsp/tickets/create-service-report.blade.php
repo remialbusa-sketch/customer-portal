@@ -392,13 +392,12 @@
                             </div>
                         </div>
                         <label class="form-control w-full mb-2">
-                            <div class="label py-1"><span class="label-text text-sm font-medium">Your name <span class="text-error">*</span></span></div>
+                            <div class="label py-1"><span class="label-text text-sm font-medium">Your name</span></div>
                             <input
                                 type="text"
                                 wire:model="tspSignatureName"
                                 class="input input-bordered input-sm w-full"
                                 placeholder="{{ $tspName }}"
-                                required
                             />
                         </label>
                         <x-signature-pad name="tspSignatureDataUrl" :width="500" :height="120" />
@@ -415,23 +414,21 @@
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
                             <label class="form-control w-full">
-                                <div class="label py-1"><span class="label-text text-sm font-medium">Customer name <span class="text-error">*</span></span></div>
+                                <div class="label py-1"><span class="label-text text-sm font-medium">Customer name</span></div>
                                 <input
                                     type="text"
                                     wire:model="customerName"
                                     class="input input-bordered input-sm w-full"
                                     placeholder="Customer's full name"
-                                    required
                                 />
                             </label>
                             <label class="form-control w-full">
-                                <div class="label py-1"><span class="label-text text-sm font-medium">Customer email <span class="text-error">*</span></span></div>
+                                <div class="label py-1"><span class="label-text text-sm font-medium">Customer email</span></div>
                                 <input
                                     type="email"
                                     wire:model="customerEmail"
                                     class="input input-bordered input-sm w-full"
                                     placeholder="customer@example.com"
-                                    required
                                 />
                             </label>
                         </div>
@@ -449,23 +446,21 @@
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
                             <label class="form-control w-full">
-                                <div class="label py-1"><span class="label-text text-sm font-medium">Biomed name <span class="text-error">*</span></span></div>
+                                <div class="label py-1"><span class="label-text text-sm font-medium">Biomed name</span></div>
                                 <input
                                     type="text"
                                     wire:model="biomedName"
                                     class="input input-bordered input-sm w-full"
                                     placeholder="Biomed contact's full name"
-                                    required
                                 />
                             </label>
                             <label class="form-control w-full">
-                                <div class="label py-1"><span class="label-text text-sm font-medium">Biomed email <span class="text-error">*</span></span></div>
+                                <div class="label py-1"><span class="label-text text-sm font-medium">Biomed email</span></div>
                                 <input
                                     type="email"
                                     wire:model="biomedEmail"
                                     class="input input-bordered input-sm w-full"
                                     placeholder="biomed@example.com"
-                                    required
                                 />
                             </label>
                         </div>

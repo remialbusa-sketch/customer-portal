@@ -98,17 +98,33 @@ check('BIOMED signature pad',           str_contains($html, 'x-data="signaturePa
 check('All three <canvas> elements',    substr_count($html, '<canvas') === 3,                                          $pass, $fail);
 check('Submit button rendered',         str_contains($html, 'Submit report'),                                           $pass, $fail);
 
-// ── 3. Validation rejects bad input ────────────────────────────────────────
+// ── 3. Validation: signatures are optional as of 2026-07-30 ────────────────
 echo "\n── 3. Validation ──\n";
-$badTest = Livewire::test(CreateServiceReport::class, ['ticketNumber' => '2749008227']);
-// Submit with NO fields filled - should reject on TSP signature name.
-$badTest->call('submit', app(SubmitServiceReport::class));
-$err = $badTest->get('lastError');
-if ($err !== null && stripos($err, 'signature') === false) {
-    echo "  (err was: " . substr((string) $err, 0, 120) . ")\n";
+// Submit a minimally-valid TSR (email auto-fills, status defaults to
+// in_progress) with all three signatures empty. Should succeed without
+// any "signature" validation error and without writing any signature
+// files to disk.
+$minTest = Livewire::test(CreateServiceReport::class, ['ticketNumber' => '2749008227'])
+    ->set('problemAndConcerns', 'Validation test: signatures intentionally omitted.')
+    ->set('jobDone',           'n/a')
+    ->set('machineSystemSerialNumber', 'TEST-001');
+$localIdForMin = $minTest->get('localId');
+$minTest->call('submit', app(SubmitServiceReport::class));
+$err = $minTest->instance()->lastError;
+if ($err !== null) {
+    echo "  (err was: " . substr((string) $err, 0, 200) . ")\n";
 }
-check('Empty TSR is rejected',          $err !== null, $pass, $fail);
-check('Error message mentions signature', $err !== null && stripos($err, 'signature') !== false, $pass, $fail);
+check('Minimal TSR (no signatures) submits cleanly', $err === null, $pass, $fail);
+
+// Now check the row in the DB - signature paths should be NULL.
+$minRow = ServiceReport::where('local_id', $localIdForMin)->first();
+check('Row was persisted',                          $minRow !== null, $pass, $fail);
+check('tsp_signature_path is null',                 $minRow?->tsp_signature_path === null,      $pass, $fail);
+check('customer_signature_path is null',            $minRow?->customer_signature_path === null, $pass, $fail);
+check('biomed_signature_path is null',              $minRow?->biomed_signature_path === null,   $pass, $fail);
+if ($minRow) {
+    ServiceReport::where('local_id', $localIdForMin)->delete();
+}
 
 // ── 4. Happy path: submit a fully-filled TSR, expect a row in pending state ─
 echo "\n── 4. Happy path submission ──\n";

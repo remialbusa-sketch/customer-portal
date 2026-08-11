@@ -21,6 +21,12 @@
 
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+        {{-- Livewire styles (Livewire 3's runtime injects a tiny
+             stylesheet for `wire:loading` etc.). Loaded from the
+             vendor URL published by `php artisan livewire:publish`
+             at /vendor/livewire/livewire.css. --}}
+        @livewireStyles
     </head>
     <body class="font-sans antialiased bg-base-200 text-base-content">
         <div class="min-h-screen">
@@ -41,6 +47,20 @@
                 {{ $slot }}
             </main>
         </div>
+
+        {{-- Livewire runtime: registers the `Livewire` global,
+             hooks the `wire:click` / `wire:submit` / `wire:model`
+             directives, and exposes the `/livewire/update`
+             endpoint. Without this, all `<livewire:*>` components
+             on the page render as static HTML and their handlers
+             never fire — chat, time-tracker, internal-notes, the
+             TSR wizard, all of it.
+
+             NOTE: must come BEFORE `@stack('scripts')` so any
+             per-view `@push('scripts')` block that references
+             `Livewire` (e.g. calls `Livewire.dispatch(...)`) runs
+             after the runtime is available. --}}
+        @livewireScripts
 
         @stack('scripts')
     </body>

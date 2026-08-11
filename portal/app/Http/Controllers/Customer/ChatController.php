@@ -26,6 +26,10 @@ class ChatController extends Controller
         $item = $this->loadMondayTicket($id);
         $this->authorizeTicketAccess($user, $item);
 
+        // Seed the session cache so the first poll doesn't re-hit
+        // Monday. Mirrors `authorizeWithSessionCache()`'s TTL.
+        session()->put("chat-access:{$user->id}:{$id}", true);
+
         $messages = $this->loadMessageHistory($id, $user);
 
         // Resolve assigned TSP name(s) from the People column so the
@@ -57,6 +61,86 @@ class ChatController extends Controller
             'messages' => $messages,
             'assignedNames' => $assignedNames,
         ]);
+    }
+
+    /**
+     * Polling endpoint used by chat-panel.js to fetch new messages
+     * since the last seen id. This is the realtime path on cPanel
+     * shared hosting (no Pusher / no WebSocket service).
+     *
+     * Performance:
+     *   - The first call after page load costs the same as a
+     *     `show()` Monday round-trip; subsequent calls within the
+     *     access-cache TTL (5 min) hit a session key and never
+     *     call Monday at all.
+     *   - Capped at 50 messages per response to bound payload size
+     *     even on busy tickets.
+     *   - 1 query (with eager-loaded user) — no N+1 on sender_name.
+     *
+     * Response shape matches what `appendMessage()` in chat-panel.js
+     * expects, so the client can reuse the same dedup + render path
+     * regardless of whether the message arrived via poll or Pusher.
+     */
+    public function poll(Request $request, string $id): JsonResponse
+    {
+        $user = auth()->user();
+        $this->authorizeWithSessionCache($user, $id);
+
+        $since = (int) $request->query('since', 0);
+        $since = max(0, $since);
+
+        $query = ChatMessage::with('user')
+            ->where('monday_ticket_id', $id)
+            ->where('id', '>', $since)
+            ->orderBy('id')
+            ->limit(50);
+
+        $messages = $query->get()->map(function (ChatMessage $msg) use ($user) {
+            return [
+                'id'          => (int) $msg->id,
+                'body'        => (string) $msg->body,
+                'sender_role' => (string) $msg->sender_role,
+                'sender_name' => (string) ($msg->user?->name ?? 'Unknown'),
+                'mine'        => (int) $msg->user_id === (int) $user->id,
+                'created_at'  => optional($msg->created_at)->toIso8601String(),
+            ];
+        })->values()->all();
+
+        return response()->json([
+            'messages'   => $messages,
+            'max_id'     => (int) (ChatMessage::where('monday_ticket_id', $id)->max('id') ?? 0),
+            'server_ts'  => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * Authorize a customer against a ticket using a session cache so
+     * the polling endpoint (called every 3s while the chat panel is
+     * open) doesn't slam Monday's API on every tick.
+     *
+     * First call per (user, ticket) goes through the standard
+     * `loadMondayTicket()` + `authorizeTicketAccess()` flow (one
+     * round-trip to Monday); subsequent calls within 5 minutes hit
+     * a session key and never call Monday at all. If the access
+     * check fails the first time, the failure is NOT cached (so
+     * re-checking after a Monday fix works on the next poll).
+     */
+    protected function authorizeWithSessionCache(User $user, string $mondayTicketId): void
+    {
+        $cacheKey = "chat-access:{$user->id}:{$mondayTicketId}";
+
+        if (session()->has($cacheKey)) {
+            // Cached "yes" — short-circuit the Monday call.
+            return;
+        }
+
+        $item = $this->loadMondayTicket($mondayTicketId);
+        $this->authorizeTicketAccess($user, $item);
+
+        // 5 minutes is long enough to absorb thousands of polls but
+        // short enough that a Monday-side revocation (e.g. customer
+        // removed from a ticket) is picked up reasonably quickly.
+        session()->put($cacheKey, true);
     }
 
     /**

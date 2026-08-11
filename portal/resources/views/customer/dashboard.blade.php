@@ -79,7 +79,10 @@
                 </x-ui.card>
             </div>
 
-            {{-- ───── Your service requests ───── --}}
+            {{-- ───── Your service requests ─────
+                 Alpine-powered filter bar + client-side sorting.
+                 The component receives the full ticket list as JSON,
+                 then filters/sorts in-browser — zero extra round trips. --}}
             <x-ui.card
                 title="Your service requests"
                 subtitle="Tap any row to see the full timeline and updates."
@@ -97,92 +100,135 @@
                     </a>
                 </x-slot:actions>
 
-                @if(empty($tickets))
-                    <div class="p-2">
-                        <x-ui.empty-state
-                            icon="📋"
-                            title="No service requests yet"
-                            body="When you submit a service request it will show up here so you can track progress and add updates."
-                            cta="Start a service request"
-                            :ctaRoute="'tickets.create'"
-                        />
-                    </div>
-                @else
-                    <ul role="list" class="divide-y divide-base-300/70">
-                        @foreach($tickets as $t)
-                            @php
-                                $statusLower = strtolower((string) $t['status_text']);
-                                $statusConfig = match(true) {
-                                    str_contains($statusLower, 'new') || str_contains($statusLower, 'open')
-                                        => ['class' => 'badge-info',    'dot' => 'bg-info'],
-                                    str_contains($statusLower, 'progress')
-                                        => ['class' => 'badge-warning', 'dot' => 'bg-warning'],
-                                    str_contains($statusLower, 'awaiting')
-                                        => ['class' => 'badge-accent',  'dot' => 'bg-accent'],
-                                    str_contains($statusLower, 'resolved') || str_contains($statusLower, 'closed') || str_contains($statusLower, 'done') || str_contains($statusLower, 'complete')
-                                        => ['class' => 'badge-success', 'dot' => 'bg-success'],
-                                    default
-                                        => ['class' => 'badge-ghost',   'dot' => 'bg-base-content/40'],
-                                };
+                <div x-data="ticketFilter({ tickets: {{ Js::from($ticketsJson) }} })">
+                    {{-- ── Filter bar ── --}}
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 border-b border-base-300/70 bg-base-100/50">
+                        {{-- Search --}}
+                        <div class="relative flex-1 min-w-[160px] max-w-xs">
+                            <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-base-content/40 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            <input type="search" x-model="query" placeholder="Search tickets…"
+                                   class="input input-xs input-bordered w-full pl-7 h-8 text-sm">
+                        </div>
 
-                                // Resolve assigned TSP name(s) from
-                                // the local users table. We do this
-                                // once per row (the dataset is small)
-                                // so the customer can see who's on
-                                // the ticket without opening the
-                                // detail page.
-                                $tspPersonIds = array_map('strval', $t['tsp_person_ids'] ?? []);
-                                $tspNameMap = \App\Services\MondayClient::resolveTspNames($tspPersonIds);
-                                $assignedNames = [];
-                                foreach ($tspPersonIds as $pid) {
-                                    $name = $tspNameMap[$pid] ?? null;
-                                    if ($name) {
-                                        $assignedNames[] = $name;
-                                    } else {
-                                        $assignedNames[] = 'TSP #' . $pid;
-                                    }
-                                }
-                            @endphp
-                            <li>
-                                <a href="{{ route('tickets.show', $t['id']) }}"
-                                   class="block px-4 py-3.5 hover:bg-base-200/60 transition group">
-                                    <div class="flex items-center gap-3">
-                                        <div class="flex-1 min-w-0">
-                                            <div class="flex items-center gap-2 mb-1 flex-wrap">
-                                                <span class="text-[11px] font-mono text-base-content/50">#{{ $t['id'] }}</span>
-                                                <span class="badge {{ $statusConfig['class'] }} badge-sm gap-1 font-medium">
-                                                    <span class="w-1.5 h-1.5 rounded-full {{ $statusConfig['dot'] }}"></span>
-                                                    {{ $t['status_text'] ?? '—' }}
-                                                </span>
-                                                @if(!empty($assignedNames))
-                                                    <span class="badge badge-outline badge-sm gap-1 text-[10px]" title="Assigned technician{{ count($assignedNames) > 1 ? 's' : '' }}">
-                                                        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                                                        {{ implode(', ', $assignedNames) }}
+                        {{-- Status dropdown --}}
+                        <div class="dropdown dropdown-end">
+                            <button class="btn btn-xs btn-ghost gap-1" tabindex="0">
+                                <span x-text="statusFilter.length ? `Status (${statusFilter.length})` : 'Status'"></span>
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </button>
+                            <ul class="dropdown-content menu menu-xs p-1.5 shadow-lg bg-base-100 rounded-box w-40 z-20 border border-base-300/60">
+                                <li><a @click="toggleStatus('open')" :class="{ active: statusFilter.includes('open') }" class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-info"></span>Open</a></li>
+                                <li><a @click="toggleStatus('in_progress')" :class="{ active: statusFilter.includes('in_progress') }" class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-warning"></span>In progress</a></li>
+                                <li><a @click="toggleStatus('awaiting')" :class="{ active: statusFilter.includes('awaiting') }" class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-accent"></span>Awaiting</a></li>
+                                <li><a @click="toggleStatus('resolved')" :class="{ active: statusFilter.includes('resolved') }" class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-success"></span>Resolved</a></li>
+                                <li><a @click="toggleStatus('uncategorised')" :class="{ active: statusFilter.includes('uncategorised') }" class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-base-content/30"></span>Uncategorised</a></li>
+                            </ul>
+                        </div>
+
+                        {{-- Sort --}}
+                        <div class="join">
+                            <button @click="sort = 'newest'" :class="sort === 'newest' ? 'btn-active' : ''" class="btn btn-xs join-item gap-1">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/></svg>
+                                Newest
+                            </button>
+                            <button @click="sort = 'oldest'" :class="sort === 'oldest' ? 'btn-active' : ''" class="btn btn-xs join-item gap-1">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m4-4v12m0 0l-4-4m4 4l4-4"/></svg>
+                                Oldest
+                            </button>
+                        </div>
+
+                        {{-- Clear filters --}}
+                        <button x-show="activeFilterCount > 0"
+                                @click="clearFilters()"
+                                class="btn btn-xs btn-ghost text-base-content/50 gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            Clear
+                        </button>
+                    </div>
+
+                    {{-- ── Active filter badges ── --}}
+                    <template x-if="activeFilterCount > 0">
+                        <div class="flex flex-wrap items-center gap-1.5 px-4 py-1.5 border-b border-base-300/40 bg-base-100/30">
+                            <template x-for="s in statusFilter" :key="s">
+                                <button @click="toggleStatus(s)"
+                                        class="badge badge-sm gap-1 cursor-pointer hover:opacity-70 transition"
+                                        :class="s === 'open' ? 'badge-info' : s === 'in_progress' ? 'badge-warning' : s === 'awaiting' ? 'badge-accent' : s === 'resolved' ? 'badge-success' : 'badge-ghost'">
+                                    <span x-text="s.replace('_', ' ')"></span>
+                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </template>
+                            <span class="text-[10px] text-base-content/40 ml-1" x-text="`· ${filteredTickets.length} of ${tickets.length}`"></span>
+                        </div>
+                    </template>
+
+                    {{-- ── Empty: no tickets at all ── --}}
+                    <template x-if="tickets.length === 0">
+                        <div class="p-2">
+                            <x-ui.empty-state
+                                icon="📋"
+                                title="No service requests yet"
+                                body="When you submit a service request it will show up here so you can track progress and add updates."
+                                cta="Start a service request"
+                                :ctaRoute="'tickets.create'"
+                            />
+                        </div>
+                    </template>
+
+                    {{-- ── Empty: filtered out ── --}}
+                    <template x-if="tickets.length > 0 && filteredTickets.length === 0">
+                        <div class="p-2">
+                            <x-ui.empty-state
+                                icon="🔍"
+                                title="No matching tickets"
+                                body="Try adjusting your search or filters."
+                            />
+                        </div>
+                    </template>
+
+                    {{-- ── Ticket list ── --}}
+                    <template x-if="filteredTickets.length > 0">
+                        <ul role="list" class="divide-y divide-base-300/70">
+                            <template x-for="t in filteredTickets" :key="t.id">
+                                <li>
+                                    <a :href="`/tickets/${t.id}`"
+                                       class="block px-4 py-3.5 hover:bg-base-200/60 transition group">
+                                        <div class="flex items-center gap-3">
+                                            <div class="flex-1 min-w-0">
+                                                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                                                    <span class="text-[11px] font-mono text-base-content/50" x-text="`#${t.id}`"></span>
+                                                    <span :class="`badge ${statusBadge(t.status_text).class} badge-sm gap-1 font-medium`">
+                                                        <span :class="`w-1.5 h-1.5 rounded-full ${statusBadge(t.status_text).dot}`"></span>
+                                                        <span x-text="t.status_text || '—'"></span>
                                                     </span>
-                                                @endif
+                                                    <template x-if="t.assigned_names && t.assigned_names.length">
+                                                        <span class="badge badge-outline badge-sm gap-1 text-[10px]"
+                                                              :title="`Assigned technician${t.assigned_names.length > 1 ? 's' : ''}`">
+                                                            <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                                                            <span x-text="t.assigned_names.join(', ')"></span>
+                                                        </span>
+                                                    </template>
+                                                </div>
+                                                <h3 class="text-sm font-semibold text-base-content truncate group-hover:text-primary transition"
+                                                    x-text="t.subject_text || t.name">
+                                                </h3>
+                                                <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-base-content/60 mt-1">
+                                                    <template x-if="t.request_type_text">
+                                                        <span x-text="t.request_type_text"></span>
+                                                    </template>
+                                                </div>
                                             </div>
-                                            <h3 class="text-sm font-semibold text-base-content truncate group-hover:text-primary transition">
-                                                {{ $t['subject_text'] ?: $t['name'] }}
-                                            </h3>
-                                            <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-base-content/60 mt-1">
-                                                @if(!empty($t['request_type_text']))
-                                                    <span>{{ $t['request_type_text'] }}</span>
-                                                @endif
-                                                @if(!empty($t['updates_count']))
-                                                    <span>{{ $t['updates_count'] }} update{{ $t['updates_count'] === 1 ? '' : 's' }}</span>
-                                                @endif
-                                            </div>
+                                            <svg class="w-4 h-4 text-base-content/40 group-hover:text-primary group-hover:translate-x-0.5 transition flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                            </svg>
                                         </div>
-                                        <svg class="w-4 h-4 text-base-content/40 group-hover:text-primary group-hover:translate-x-0.5 transition flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                        </svg>
-                                    </div>
-                                </a>
-                            </li>
-                        @endforeach
-                    </ul>
-                @endif
+                                    </a>
+                                </li>
+                            </template>
+                        </ul>
+                    </template>
+                </div>
             </x-ui.card>
         </div>
     </div>
 </x-app-layout>
+

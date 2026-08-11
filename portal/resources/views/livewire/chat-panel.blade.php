@@ -73,7 +73,19 @@ new class extends Component
             default
                 => app(\App\Http\Controllers\Customer\ChatController::class),
         };
-        $controller->send($request, (string) $this->ticketId);
+
+        // Tsp\ChatController::send() requires the MondayClient
+        // dependency as a 3rd parameter (it marks the ticket as
+        // RESPONDED on the Monday board). Customer\ChatController
+        // does not — it's read-only from Monday's side. Calling
+        // Tsp\ChatController without it throws a TypeError which
+        // Livewire 3 catches and converts to abort(419).
+        if ($controller instanceof \App\Http\Controllers\Tsp\ChatController) {
+            $monday = app(\App\Services\MondayClient::class);
+            $controller->send($request, (string) $this->ticketId, $monday);
+        } else {
+            $controller->send($request, (string) $this->ticketId);
+        }
 
         // Skip Livewire's re-render of this component: the controller
         // already persisted the message and broadcast it on Pusher,
@@ -92,6 +104,12 @@ new class extends Component
         ticketId: @js($ticketId),
         currentUserName: @js($currentUserName),
         currentUserRole: @js($currentUserRole),
+        pollUrl: @js(
+            $currentUserRole === 'customer'
+                ? route('tickets.chat.poll', ['id' => $ticketId])
+                : route('tsp.tickets.chat.poll', ['id' => $ticketId])
+        ),
+        csrf: @js(csrf_token()),
     })"
     x-init="init()"
     class="bg-base-100 shadow sm:rounded-2xl flex flex-col h-[640px] border border-base-300/70"
@@ -116,7 +134,7 @@ new class extends Component
         {{ $slot ?? '' }}
         @isset($messages)
             @forelse ($messages as $msg)
-                <div class="flex {{ $msg['mine'] ? 'justify-end' : 'justify-start' }}">
+                <div data-server-id="{{ $msg['id'] }}" data-mine="{{ $msg['mine'] ? '1' : '0' }}" class="flex {{ $msg['mine'] ? 'justify-end' : 'justify-start' }}">
                     <div class="max-w-[80%] rounded-lg px-4 py-2 text-sm
                                 {{ $msg['mine'] ? 'bg-primary text-primary-content' : 'bg-base-200 text-base-content' }}">
                         @if (! $msg['mine'])
@@ -162,7 +180,11 @@ new class extends Component
             <span>This ticket is closed. Chat is read-only.</span>
         </div>
     @else
-        <form wire:submit.prevent="send" class="border-t border-base-300/70 px-4 py-3 flex gap-2">
+        <form
+            wire:submit.prevent="send"
+            @chat-sent-ack.window="$el.querySelector('input[name=body],input').value = ''"
+            class="border-t border-base-300/70 px-4 py-3 flex gap-2"
+        >
             <input
                 type="text"
                 wire:model="body"

@@ -6,6 +6,7 @@ namespace App\Livewire\Tsp;
 
 use App\Actions\SyncPendingTsrReports;
 use App\Enums\SyncState;
+use App\Events\TicketClaimed;
 use App\Models\ServiceReport;
 use App\Services\MondayClient;
 use Illuminate\Contracts\View\View;
@@ -140,6 +141,41 @@ class Dashboard extends Component
      */
     public ?string $claimingId = null;
 
+    /**
+     * Holds the ticket data while the claim-confirmation modal is
+     * open. Null when no modal is shown. The modal displays
+     * account name, brand/model, subject, and description before
+     * the TSP confirms.
+     *
+     * @var ?array{id:string, name:string, status_text:?string, subject_text:?string, account_name:?string, item:array}
+     */
+    public ?array $claimingTicket = null;
+
+    /**
+     * Client-side filter state for both ticket lists. Bound with
+     * wire:model.live so every change triggers a Livewire round-
+     * trip and the #[Computed] getters re-evaluate immediately.
+     *
+     * @var array{query:string, status:string[], sort: string}
+     */
+    public array $filters = [
+        'query'  => '',
+        'status' => [],
+        'sort'   => 'newest',
+    ];
+
+    /**
+     * Human-readable warning to show when a TSP's region can't be
+     * resolved (region/branch/address are all blank). Non-null
+     * means "show the warning card". The user can't claim tickets
+     * until the region is set — silently showing an empty list
+     * was confusing (user filed a bug 2026-08-07: "no claimable
+     * tickets even though there is an open ticket for NCR").
+     *
+     * @var ?string
+     */
+    public ?string $regionWarning = null;
+
     public function mount(MondayClient $monday): void
     {
         $user = auth()->user();
@@ -155,6 +191,7 @@ class Dashboard extends Component
     protected function loadLists(MondayClient $monday): void
     {
         $user = auth()->user();
+        $this->regionWarning = null;  // reset on every load
         $stats = [
             'total'         => 0,
             'open'          => 0,
@@ -219,9 +256,9 @@ class Dashboard extends Component
         // RegionResolver is named "ForCustomer" but it operates on
         // any User (just inspects region/branch/address fields) so
         // we reuse it here. If both are null/unresolvable, the
-        // Available list stays empty — that's the correct behaviour
-        // for a TSP with no known region (they'd be shown all
-        // regions which is too broad to be useful).
+        // Available list stays empty and a regionWarning is shown
+        // so the TSP knows why they see no tickets (was a silent
+        // failure as of 2026-08-07).
         $tspRegion = $user->region;
         if (empty($tspRegion)) {
             $tspRegion = \App\Support\RegionResolver::resolveForCustomer($user);
@@ -232,6 +269,8 @@ class Dashboard extends Component
             } catch (\Throwable $e) {
                 $available = [];
             }
+        } else {
+            $this->regionWarning = 'No region is set on your account, so the "Available tickets in your region" list is empty. Contact your manager to have your region (NCR, North Luzon, Visayas, Mindanao) set on your profile.';
         }
 
         // Split outstanding TSRs into two buckets so the banner
@@ -291,6 +330,50 @@ class Dashboard extends Component
         $this->errorReports     = $errorReports;
     }
 
+    // ---------------------------------------------------------------------
+    // Claim modal
+    // ---------------------------------------------------------------------
+
+    /**
+     * Open the claim-confirmation modal for a ticket. Finds the
+     * ticket in the current `availableTickets` array and stores a
+     * reference so the modal can render its details.
+     */
+    public function showClaimModal(string $id): void
+    {
+        foreach ($this->availableTickets as $t) {
+            if ((string) $t['id'] === $id) {
+                $this->claimingTicket = $t;
+                return;
+            }
+        }
+    }
+
+    /**
+     * Close the claim-confirmation modal without claiming.
+     */
+    public function cancelClaim(): void
+    {
+        $this->claimingTicket = null;
+    }
+
+    /**
+     * Confirm the claim from the modal. Calls the existing
+     * claim() method with the ticket id stored in the modal
+     * state, then closes the modal.
+     */
+    public function confirmClaim(MondayClient $monday): void
+    {
+        $ticket = $this->claimingTicket;
+        $this->claimingTicket = null;
+
+        if ($ticket === null || empty($ticket['id'])) {
+            return;
+        }
+
+        $this->claim((string) $ticket['id'], $monday);
+    }
+
     /**
      * Claim an unclaimed ticket: write the TSP's person ID into
      * the People column on Monday and flip the response status.
@@ -330,6 +413,26 @@ class Dashboard extends Component
             return;
         }
 
+        // Region guard: the Available pool is already scoped to the
+        // TSP's region via unclaimedTicketsForRegion(), but claim()
+        // accepts an arbitrary ticket id, so re-verify the ticket's
+        // customer region here BEFORE writing to Monday. This stops
+        // a TSP from claiming a ticket outside their region by
+        // crafting a direct POST to this Livewire action.
+        $tspRegion = $user->region;
+        if (empty($tspRegion)) {
+            $tspRegion = \App\Support\RegionResolver::resolveForCustomer($user);
+        }
+        if (empty($tspRegion) || ! $monday->ticketIsInRegion((int) $id, $tspRegion)) {
+            Log::warning('Livewire Dashboard::claim rejected — ticket outside TSP region', [
+                'ticket_id' => $id,
+                'user_id'   => $user->id,
+                'region'    => $tspRegion,
+            ]);
+            $this->dispatch('toast', type: 'error', title: 'Not in your region', body: "Ticket #{$id} is outside your assigned region and cannot be claimed.");
+            return;
+        }
+
         $this->claiming = true;
         $this->claimingId = $id;
 
@@ -347,6 +450,12 @@ class Dashboard extends Component
             return;
         }
 
+        // Bust the board-items cache so loadLists() fetches
+        // fresh data from Monday — without this, the 30s
+        // Cache::remember in listTickets() would put the ticket
+        // back in Available for up to 30 seconds.
+        $monday->forgetBoardCache();
+
         // Optimistic UI: remove from available, add to mine,
         // refresh stats, and toast success. No page reload, no
         // redirect — the TSP stays on the dashboard.
@@ -362,6 +471,15 @@ class Dashboard extends Component
 
         $this->claiming = false;
         $this->claimingId = null;
+
+        // Broadcast the claim so other TSPs' dashboards drop the
+        // ticket from their Available pool instantly (via the
+        // region.all Pusher channel + realtime-dashboard.js).
+        event(new TicketClaimed(
+            mondayTicketId: $id,
+            tspName: $user->name,
+            tspRole: $user->role,
+        ));
 
         $this->dispatch('toast', type: 'success', title: 'Ticket claimed', body: "Ticket #{$id} is now in your queue.");
     }
@@ -569,6 +687,10 @@ class Dashboard extends Component
         if ($claimedId === '') {
             return;
         }
+        // Bust the board cache so loadLists() fetches fresh
+        // data — the broadcast means state changed on Monday.
+        $monday->forgetBoardCache();
+
         // Drop the just-claimed ticket from the available pool
         // before re-loading from Monday, so a race condition
         // (e.g. another TSP claims between our last poll and now)
@@ -607,14 +729,15 @@ class Dashboard extends Component
         }
         if (! $claimed) {
             // Try a local query first, then a Monday fetch.
-            // Include `subject_text` (even if empty) so the view's
-            // `?:` Elvis operator doesn't error on an undefined
-            // key in PHP 8.1+.
+            // Include `subject_text` and `account_name` (even if
+            // empty) so the view's `?:` Elvis operator doesn't
+            // error on an undefined key in PHP 8.1+.
             $claimed = [
                 'id'           => $id,
                 'status_text'  => 'Working on it',
                 'name'         => "Ticket #{$id}",
                 'subject_text' => null,
+                'account_name' => null,
                 'tsp_person_ids' => [],
                 'item'         => ['column_values' => []],
             ];
@@ -677,6 +800,116 @@ class Dashboard extends Component
         }
 
         $this->stats = $stats;
+    }
+
+    // ---------------------------------------------------------------------
+    // Filtering
+    // ---------------------------------------------------------------------
+
+    /**
+     * Toggle a status bucket in/out of the filters.status array.
+     * Called from the Blade dropdown menu items.
+     */
+    public function toggleStatusFilter(string $bucket): void
+    {
+        $idx = array_search($bucket, $this->filters['status'], true);
+        if ($idx !== false) {
+            unset($this->filters['status'][$idx]);
+            $this->filters['status'] = array_values($this->filters['status']);
+        } else {
+            $this->filters['status'][] = $bucket;
+        }
+    }
+
+    /**
+     * Reset all filters to defaults. Called from the Clear button.
+     */
+    public function resetFilters(): void
+    {
+        $this->filters = ['query' => '', 'status' => [], 'sort' => 'newest'];
+    }
+
+    /**
+     * Filtered view of $this->myTickets. Re-evaluated by
+     * Livewire whenever myTickets or filters changes.
+     *
+     * @return array<int, array>
+     */
+    #[Computed]
+    public function filteredMyTickets(): array
+    {
+        return $this->applyFilters($this->myTickets);
+    }
+
+    /**
+     * Filtered view of $this->availableTickets. Same lifecycle
+     * as filteredMyTickets.
+     *
+     * @return array<int, array>
+     */
+    #[Computed]
+    public function filteredAvailable(): array
+    {
+        return $this->applyFilters($this->availableTickets, isAvailable: true);
+    }
+
+    /**
+     * Shared filter/sort pipeline used by both computed methods.
+     *
+     * @param  array<int, array>  $list
+     * @param  bool  $isAvailable  True for the Available pool (fewer ticket fields).
+     * @return array<int, array>
+     */
+    private function applyFilters(array $list, bool $isAvailable = false): array
+    {
+        $f = $this->filters;
+
+        // Text search — subject, name, ticket id, account name
+        if (! empty($f['query'])) {
+            $q = strtolower($f['query']);
+            $list = array_values(array_filter($list, static function (array $t) use ($q) {
+                $subject = strtolower((string) ($t['subject_text'] ?? $t['name'] ?? ''));
+                $id      = (string) ($t['id'] ?? '');
+                $account = strtolower((string) ($t['account_name'] ?? ''));
+                return str_contains($subject, $q)
+                    || str_contains($id, $q)
+                    || str_contains($account, $q);
+            }));
+        }
+
+        // Status bucket filter
+        if (! empty($f['status'])) {
+            $list = array_values(array_filter($list, static function (array $t) use ($f) {
+                $s = strtolower((string) ($t['status_text'] ?? ''));
+                foreach ($f['status'] as $bucket) {
+                    if ($bucket === 'open'
+                        && (str_contains($s, 'new') || str_contains($s, 'open') || ($s !== '' && $s !== '—'))
+                    ) {
+                        return true;
+                    }
+                    if ($bucket === 'in_progress' && str_contains($s, 'progress')) {
+                        return true;
+                    }
+                    if ($bucket === 'awaiting' && str_contains($s, 'awaiting')) {
+                        return true;
+                    }
+                    if ($bucket === 'resolved'
+                        && (str_contains($s, 'resolved') || str_contains($s, 'closed')
+                            || str_contains($s, 'done') || str_contains($s, 'complete'))
+                    ) {
+                        return true;
+                    }
+                }
+                return false;
+            }));
+        }
+
+        // Sort
+        if ($f['sort'] === 'oldest') {
+            $list = array_reverse($list);
+        }
+
+        return array_values($list);
     }
 
     /**

@@ -152,6 +152,11 @@ class TicketController extends Controller
                 ->withErrors(['monday' => 'Monday.com did not return a ticket id. Please try again or contact support.']);
         }
 
+        // Clear the board-item cache so the redirect to the customer's
+        // dashboard picks up the freshly created ticket instead of
+        // serving stale data from the 30-second cache window.
+        $monday->forgetBoardCache();
+
         // Response status stays "NOT YET" — it flips to "RESPONDED"
         // when a TSP claims the ticket from the dashboard.
 
@@ -176,6 +181,8 @@ class TicketController extends Controller
                 brand:          $brand,
                 model:          $model,
                 requestType:    $data['request_type'],
+                customerName:   $user->name,
+                customerEmail:  $user->email,
             ));
         } catch (\Throwable $e) {
             // Never fail the request because of a broadcast hiccup —

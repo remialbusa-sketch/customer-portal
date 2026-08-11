@@ -25,9 +25,13 @@ namespace App\Support\Monday;
 final class MondayColumnIds
 {
     // ─── Boards ────────────────────────────────────────────────────────
-    public const BOARD_TICKETS         = 5028514175; // customer tickets (live)
+    // These are last-resort fallbacks. Production code reads from
+    // config('services.monday.*') first; these constants are only
+    // used when the config key is missing. Keep in sync with
+    // config/services.php.
+    public const BOARD_TICKETS         = 5029331350; // customer tickets (live as of 2026-07, was 5028514175)
     public const BOARD_TSR             = 5029041107; // EXTERNAL - TSR
-    public const BOARD_CUSTOMERS       = 5029331350; // (alt id, kept for reference)
+    public const BOARD_CUSTOMERS       = 5029327268; // Customer Details board
 
     // ─── Tickets board (5028514175) — read-mostly, but we write to status95 ─
     public const TICKETS_COL_STATUS          = 'status95'; // TODO: verify exact column id
@@ -78,7 +82,7 @@ final class MondayColumnIds
     ];
 
     // ─── TSR board (5029041107) — written when a TSP submits a report ─
-    public const TSR_COL_SERVICE_NUMBER      = 'board_relation_mm3f6835';
+    public const TSR_COL_SERVICE_NUMBER      = 'board_relation_mm4gg1rm'; // Tickets board-relation (was mm3f6835 pre-2026-07)
     public const TSR_COL_SERVICE_STATUS      = 'color_mm3gbrby';
     public const TSR_COL_PROBLEM             = 'long_text_mks8824j';
     public const TSR_COL_JOB_DONE            = 'long_text_mks8y6j7';

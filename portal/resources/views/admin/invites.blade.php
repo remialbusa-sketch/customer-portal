@@ -21,13 +21,31 @@
 
             {{-- ───────  Success banner with the issued link  ─────── --}}
             @if (session('invite_url'))
-                <div role="alert" class="alert alert-success shadow-sm flex-col items-start gap-2 p-4">
+                @php
+                    $emailed = session('invite_emailed', false);
+                    $bannerClass = $emailed ? 'alert-success' : 'alert-info';
+                    $iconPath = $emailed
+                        ? 'M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z'
+                        : 'M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z';
+                @endphp
+                <div role="alert" class="alert {{ $bannerClass }} shadow-sm flex-col items-start gap-2 p-4">
                     <div class="flex items-center gap-2">
-                        <svg class="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                        <svg class="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="{{ $iconPath }}" clip-rule="evenodd"/></svg>
                         <h3 class="font-semibold">{{ session('status') }}</h3>
                     </div>
+                    @if ($emailed)
+                        <p class="text-xs text-base-content/70">
+                            The customer should receive the email at <span class="font-mono">{{ session('invite_email') }}</span> within a few minutes.
+                            If they don't see it, ask them to check spam and to whitelist
+                            <span class="font-mono">{{ config('mail.from.address') }}</span>.
+                        </p>
+                    @else
+                        <p class="text-xs text-base-content/70">
+                            Email delivery was skipped or failed. Copy the link below and send it to the customer yourself.
+                        </p>
+                    @endif
                     <p class="text-xs text-base-content/70">
-                        Expires {{ session('invite_expires_at') }}. Single use. Send this link to the customer:
+                        Expires {{ session('invite_expires_at') }}. Single use. {{ $emailed ? 'A copy is shown below for your records.' : 'Send this link to the customer:' }}
                     </p>
                     <div class="mt-1 flex items-stretch gap-2 w-full">
                         <input
@@ -108,6 +126,31 @@
                                 <span class="text-sm text-base-content/80">Revoke any prior unused links for this email</span>
                             </label>
                         </div>
+                    </div>
+
+                    <div class="rounded-md border border-primary/30 bg-primary/5 p-3">
+                        <label class="label cursor-pointer justify-start gap-2 p-0">
+                            <input
+                                type="hidden"
+                                name="send_email"
+                                value="0"
+                            />
+                            <input
+                                type="checkbox"
+                                name="send_email"
+                                value="1"
+                                {{ old('send_email', '1') ? 'checked' : '' }}
+                                class="checkbox checkbox-primary checkbox-sm"
+                            />
+                            <span class="text-sm text-base-content/80">
+                                Email the invite to <span class="font-mono text-xs">{{ old('email') ?: 'the customer' }}</span>
+                            </span>
+                        </label>
+                        <p class="text-xs text-base-content/60 mt-1 pl-8">
+                            Sends the registration link via the configured Gmail SMTP account
+                            (<span class="font-mono">{{ config('mail.from.address') }}</span>).
+                            If sending fails, the link is still shown on this page so you can copy it manually.
+                        </p>
                     </div>
 
                     <div class="flex items-center gap-3">

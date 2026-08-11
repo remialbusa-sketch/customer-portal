@@ -33,8 +33,21 @@ class AllRolesE2ETest extends TestCase
             'id' => '2749091149',
             'name' => 'Mindray - BC-6800 | Verify relation with name fallback',
             'column_values' => [
-                'long_text_mm4f8ve0' => ['text' => 'mock note'],
+                // Stub every key resources/views/tsp/ticket-show.blade.php
+                // reads. Without these, the view throws
+                // "Undefined array key" and returns HTTP 500.
+                'text_mm5c1w5n'        => ['text' => 'Mock subject'],
+                'long_text_mm4f8ve0'   => ['text' => 'mock note'],
+                'long_text7'           => ['text' => 'mock description'],
                 'board_relation_mm4f9mwv' => ['linked_item_ids' => [12345]],
+                'status95'             => ['text' => 'OPEN'],
+                'request_type'         => ['text' => 'Service Request'],
+                'lookup_mm4f1f6y'      => ['display_value' => 'Mock Hospital'],
+                'lookup_mm4fj9gp'      => ['display_value' => 'Mock Branch'],
+                'email'                => ['text' => 'mock-customer@example.com'],
+                'date'                 => ['text' => '2026-08-01'],
+                'text_mm5apcrc'        => ['text' => 'Mindray'],
+                'text_mm5am2kf'        => ['text' => 'BC-6800'],
             ],
             'updates' => [],
         ]);

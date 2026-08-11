@@ -41,29 +41,24 @@ class RegisterWithOpenInviteTest extends TestCase
     {
         parent::setUp();
 
-        // Stub the Monday client. We expect createCustomerItem()
-        // to be called exactly once with the customer's submitted
-        // details, and we return a deterministic monday id.
-        // We use shouldIgnoreMissing() so unrelated framework
-        // calls (which we don't care about for this test) don't
-        // blow up the test even if Mockery is in strict mode.
+        // Stub the Monday client. shouldIgnoreMissing() so any
+        // call we don't set up returns null instead of throwing.
+        // Individual tests layer on top with ->shouldReceive(...)
+        // as needed.
         $this->monday = Mockery::mock(MondayClient::class)->shouldIgnoreMissing();
-        $this->monday->shouldReceive('createCustomerItem')
-            ->once()
-            ->withArgs(function (array $payload) {
-                // The payload must carry what the customer typed in
-                return ($payload['email']        ?? null) === 'newcust@stlukes.com'
-                    && ($payload['account_name'] ?? null) === "St. Luke's Medical Center"
-                    && ($payload['branch']       ?? null) === 'Quezon City'
-                    && ($payload['region']       ?? null) === 'NCR';
-            })
-            ->andReturn(self::NEW_MONDAY_CUSTOMER_ID);
-
-        // Cache busts after a write should not blow up.
         $this->monday->shouldReceive('flushCache')->andReturnNull();
         $this->monday->shouldReceive('cacheForget')->andReturnNull();
-
         $this->app->instance(MondayClient::class, $this->monday);
+
+        // Stub the directory. The default behavior is to return
+        // null from findByEmail (the customer isn't on monday
+        // yet), which is what triggers the open-invite branch
+        // in the component. Snapshot-specific tests re-bind this.
+        $directory = Mockery::mock(MondayCustomerDirectory::class);
+        $directory->shouldReceive('findByEmail')->andReturn(null);
+        $directory->shouldReceive('regions')->andReturn(['NCR', 'NORTH LUZON', 'VISAYAS', 'MINDANAO']);
+        $directory->shouldReceive('branches')->andReturn(['Quezon City', 'Manila', 'Cebu']);
+        $this->app->instance(MondayCustomerDirectory::class, $directory);
     }
 
     protected function tearDown(): void
@@ -81,6 +76,17 @@ class RegisterWithOpenInviteTest extends TestCase
     {
         Event::fake();
         Mail::fake();
+
+        $this->monday->shouldReceive('createCustomerItem')
+            ->once()
+            ->withArgs(function (array $payload) {
+                // The payload must carry what the customer typed in
+                return ($payload['email']        ?? null) === 'newcust@stlukes.com'
+                    && ($payload['account_name'] ?? null) === "St. Luke's Medical Center"
+                    && ($payload['branch']       ?? null) === 'Quezon City'
+                    && ($payload['region']       ?? null) === 'NCR';
+            })
+            ->andReturn(self::NEW_MONDAY_CUSTOMER_ID);
 
         // Build the open invite. is_snapshot = false, no monday_customer_id
         $invite = CustomerInvite::create([
@@ -138,18 +144,17 @@ class RegisterWithOpenInviteTest extends TestCase
         Event::fake();
         Mail::fake();
 
-        // Override setUp's stub — we expect createCustomerItem NOT to be called.
-        // We re-mock just for this test so shouldReceive above is discarded.
-        $fresh = Mockery::mock(MondayClient::class)->shouldIgnoreMissing();
-        $fresh->shouldNotReceive('createCustomerItem');
-        $this->app->instance(MondayClient::class, $fresh);
-
         $invite = CustomerInvite::create([
             'email'        => 'novalidate@stlukes.com',
             'token'        => 'open-token-noval-' . uniqid(),
             'is_snapshot'  => false,
             'expires_at'   => now()->addDays(7),
         ]);
+
+        // shouldIgnoreMissing on the monday mock means a non-
+        // configured createCustomerItem() call returns null
+        // instead of throwing, so validation will correctly
+        // fail and no monday row is created.
 
         $test = Volt::test('pages.auth.register', ['token' => $invite->token])
             ->set('name', 'Skip Validator')
@@ -218,10 +223,29 @@ class RegisterWithOpenInviteTest extends TestCase
         Event::fake();
         Mail::fake();
 
-        // Re-mock fresh so shouldReceive from setUp doesn't leak in.
-        $fresh = Mockery::mock(MondayClient::class)->shouldIgnoreMissing();
-        $fresh->shouldNotReceive('createCustomerItem');
-        $this->app->instance(MondayClient::class, $fresh);
+        // Re-bind the directory to actually find the snapshot
+        // customer. The default stub returns null (the "not on
+        // monday yet" case) — but this is a snapshot invite,
+        // the customer MUST already be on monday.
+        $directory = Mockery::mock(MondayCustomerDirectory::class);
+        $directory->shouldReceive('findByEmail')
+            ->with('existing@stlukes.com')
+            ->andReturn([
+                'id'           => '1234567890',
+                'name'         => "St. Luke's Medical Center",
+                'group'        => 'NCR',
+                'region'       => 'NCR',
+                'branch'       => 'Quezon City',
+                'account_name' => "St. Luke's Medical Center",
+                'email'        => 'existing@stlukes.com',
+                'address'      => '279 E. Rodriguez Sr. Ave., Quezon City',
+                'user_status'  => 'Active',
+                'brand'        => null,
+                'model'        => null,
+            ]);
+        $directory->shouldReceive('regions')->andReturn(['NCR']);
+        $directory->shouldReceive('branches')->andReturn(['Quezon City']);
+        $this->app->instance(MondayCustomerDirectory::class, $directory);
 
         $invite = CustomerInvite::create([
             'email'              => 'existing@stlukes.com',
@@ -237,6 +261,11 @@ class RegisterWithOpenInviteTest extends TestCase
 
         $this->assertTrue($invite->isSnapshot());
         $this->assertFalse($invite->isOpen());
+
+        // shouldIgnoreMissing on the monday mock means a
+        // non-configured createCustomerItem() call returns null
+        // instead of throwing. We're verifying it's NOT called
+        // by the snapshot path.
 
         Volt::test('pages.auth.register', ['token' => $invite->token])
             ->set('name', 'Existing Customer')
@@ -262,11 +291,11 @@ class RegisterWithOpenInviteTest extends TestCase
         Event::fake();
         Mail::fake();
 
-        $fresh = Mockery::mock(MondayClient::class)->shouldIgnoreMissing();
-        $fresh->shouldReceive('createCustomerItem')
+        // Force createCustomerItem to return null (the "monday
+        // is down" scenario). shouldIgnoreMissing on the rest.
+        $this->monday->shouldReceive('createCustomerItem')
             ->once()
             ->andReturn(null);
-        $this->app->instance(MondayClient::class, $fresh);
 
         $invite = CustomerInvite::create([
             'email'        => 'mondaydown@stlukes.com',

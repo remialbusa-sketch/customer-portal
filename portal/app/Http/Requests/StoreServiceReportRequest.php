@@ -17,8 +17,13 @@ use Illuminate\Validation\Rule;
  *   - `local_id` is required and UUID — the offline JS layer generates
  *     it on first save (so even a half-typed form has an id and can
  *     be resumed).
- *   - All three signatures are required. A customer signature is
- *     mandatory for a TSR to be legally valid per the business rule.
+ *   - Signature fields (TSP, customer, BIOMED — name, email, and
+ *     canvas dataUrl) are OPTIONAL as of 2026-07-30. The user
+ *     reported the modal was forcing every signature to be filled
+ *     in, which was too strict for partial TSRs and the
+ *     "first half / second half" workflow. A TSR with no signatures
+ *     is still valid; downstream code treats a missing signature
+ *     as "not yet collected".
  *   - The `data_url` regex is intentionally loose; the SignatureBlob
  *     value object does the real mime/bytes check downstream.
  *   - Status is restricted to the 5-value ServiceStatus enum.
@@ -60,17 +65,23 @@ class StoreServiceReportRequest extends FormRequest
             'machine_system_serial_number' => ['nullable', 'string', 'max:200'],
             'software_version_no'    => ['nullable', 'string', 'max:200'],
 
-            'tsp_signature.name'          => ['required', 'string', 'max:200'],
-            'tsp_signature.signature'     => ['required', 'string', 'regex:#^data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+$#'],
+            // Signature fields are optional (2026-07-30). The user
+            // reported that the modal was forcing them to fill in
+            // every signature, which is too strict for partial TSRs
+            // and "first half / second half" workflows. The submit
+            // still goes through; downstream code treats a missing
+            // signature as "not yet collected".
+            'tsp_signature.name'          => ['nullable', 'string', 'max:200'],
+            'tsp_signature.signature'     => ['nullable', 'string', 'regex:#^data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+$#'],
 
-            // Customer signature is REQUIRED for a valid TSR.
-            'customer_in_charge.full_name'    => ['required', 'string', 'max:200'],
-            'customer_in_charge.email_address'=> ['required', 'email', 'max:200'],
-            'customer_in_charge.signature'    => ['required', 'string', 'regex:#^data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+$#'],
+            // Customer signature is no longer required.
+            'customer_in_charge.full_name'    => ['nullable', 'string', 'max:200'],
+            'customer_in_charge.email_address'=> ['nullable', 'email', 'max:200'],
+            'customer_in_charge.signature'    => ['nullable', 'string', 'regex:#^data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+$#'],
 
-            'biomed_person_in_charge.name'         => ['required', 'string', 'max:200'],
-            'biomed_person_in_charge.email_address' => ['required', 'email', 'max:200'],
-            'biomed_person_in_charge.signature'    => ['required', 'string', 'regex:#^data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+$#'],
+            'biomed_person_in_charge.name'         => ['nullable', 'string', 'max:200'],
+            'biomed_person_in_charge.email_address' => ['nullable', 'email', 'max:200'],
+            'biomed_person_in_charge.signature'    => ['nullable', 'string', 'regex:#^data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+$#'],
 
             'tsp_work_with'              => ['nullable', 'array'],
             'tsp_work_with.*'            => ['string', 'max:32'],
@@ -85,9 +96,10 @@ class StoreServiceReportRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'tsp_signature.signature.required'         => 'TSP signature is required.',
-            'customer_in_charge.signature.required'     => 'Customer signature is required. A TSR without a customer signature is not valid.',
-            'biomed_person_in_charge.signature.required'=> 'BIOMED signature is required.',
+            // Signature fields are optional; no required-error messages
+            // are needed. Kept as a placeholder in case a future rule
+            // re-introduces a "required" check (e.g. for a specific
+            // ServiceStatus value).
         ];
     }
 

@@ -16,5 +16,6 @@ import './service-report-form.js';
 import './ticket-status-banner.js';
 import './realtime-dashboard.js';
 import './customer-ticket-banner.js';
+import './ticket-filter.js';
 
 window.echo = getEcho;

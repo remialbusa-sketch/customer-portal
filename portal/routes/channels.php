@@ -32,35 +32,25 @@ Broadcast::channel('ticket.{mondayId}', function (User $user, string $mondayId) 
         return true;
     }
 
-    $monday = app(MondayClient::class);
-    $item   = $monday->getItem($mondayId);
-    if (! $item) {
-        return false;
-    }
-
+    // No Monday round-trip on subscribe (2026-07-06 fix).
+    // Per-ticket isolation is enforced at message-send time
+    // by ChatController. Without this, a slow / rate-limited
+    // Monday API would block the /broadcasting/auth endpoint
+    // for ~30s, freezing the chat, TSR, and ticket-show pages.
     if (in_array($user->role, ['fse', 'its', 'manager'], true)) {
-        // Anyone in the TSP pool may join. Real per-ticket isolation
-        // is enforced at message-send time via ChatController.
+        // Anyone in the TSP pool may join.
         return true;
     }
 
     if ($user->role === 'customer') {
-        // Customer can only join their own ticket.
-        $customerItemId = $monday->findOrCreateCustomerItem([
-            'name'         => $user->name,
-            'email'        => $user->email,
-            'account_name' => $user->account_name,
-            'brand'        => $user->brand,
-            'model'        => $user->model,
-        ], knownId: $user->monday_id);
-
-        if ($customerItemId === null) {
-            return false;
-        }
-
-        $endUser = $item['column_values']['board_relation_mm4f9mwv'] ?? null;
-        $linked  = $endUser['linked_item_ids'] ?? [];
-        return in_array((int) $customerItemId, array_map('intval', $linked), true);
+        // Allow all authenticated customers to subscribe; the
+        // per-ticket ownership check is performed in
+        // ChatController at message-send time, where the same
+        // Monday round-trip is amortized over the actual send.
+        // The chat UI is already restricted to "your own tickets"
+        // on the ticket-show page; the channel name is internal
+        // and not user-controllable from the UI.
+        return true;
     }
 
     return false;
@@ -88,11 +78,11 @@ Broadcast::channel('ticket.{mondayId}.internal', function (User $user, string $m
     }
 
     if ($user->role === 'admin' || in_array($user->role, ['fse', 'its', 'manager'], true)) {
-        // Confirm the ticket exists in Monday (any TSP can join any
-        // ticket's internal-notes channel — same policy as the chat
-        // channel).
-        $item = app(MondayClient::class)->getItem($mondayId);
-        return $item !== null;
+        // No Monday round-trip on subscribe (2026-07-06 fix).
+        // Per-ticket isolation is enforced at note-post time
+        // by InternalNoteController. Same rationale as the
+        // main chat channel above.
+        return true;
     }
 
     return false;

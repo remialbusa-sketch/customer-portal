@@ -34,13 +34,14 @@ class CustomerInvite extends Model
 {
     protected $fillable = [
         'token', 'email', 'account_name', 'branch', 'region', 'address',
-        'monday_customer_id', 'expires_at', 'used_at',
+        'monday_customer_id', 'is_snapshot', 'expires_at', 'used_at',
         'used_by_user_id', 'invited_by_user_id',
     ];
 
     protected $casts = [
-        'expires_at' => 'datetime',
-        'used_at'    => 'datetime',
+        'expires_at'  => 'datetime',
+        'used_at'     => 'datetime',
+        'is_snapshot' => 'boolean',
     ];
 
     /**
@@ -101,6 +102,28 @@ class CustomerInvite extends Model
     public function isUsable(): bool
     {
         return ! $this->isUsed() && ! $this->isExpired();
+    }
+
+    /**
+     * A snapshot invite carries locked account/branch/region/address
+     * fields captured from the monday.com Customer Details board at
+     * invite-creation time, and the customer only fills in their
+     * own name + password.
+     */
+    public function isSnapshot(): bool
+    {
+        return (bool) $this->is_snapshot;
+    }
+
+    /**
+     * An open invite is issued for an email that is NOT yet on the
+     * monday.com Customer Details board. The customer types their
+     * hospital/branch/region/address on the registration form, and
+     * the portal creates a new monday row on submit.
+     */
+    public function isOpen(): bool
+    {
+        return ! $this->isSnapshot();
     }
 
     // -----------------------------------------------------------------

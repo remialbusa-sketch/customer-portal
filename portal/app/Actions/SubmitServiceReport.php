@@ -78,10 +78,13 @@ class SubmitServiceReport
                 return $report;
             }
 
-            // Phase 2: signatures to local storage
-            $tspSigPath  = $this->signatures->store($dto->tspSignature,         $dto->localId, 'tsp');
-            $custSigPath = $this->signatures->store($dto->customerInCharge,     $dto->localId, 'customer');
-            $biomedPath  = $this->signatures->store($dto->biomedPersonInCharge, $dto->localId, 'biomed');
+            // Phase 2: signatures to local storage. As of 2026-07-30
+            // signature fields are optional, so a missing/invalid
+            // pad is no longer fatal — we just store a null path
+            // for that role and let the TSR proceed.
+            $tspSigPath  = $this->storeSignatureIfPresent($dto->tspSignature,         $dto->localId, 'tsp');
+            $custSigPath = $this->storeSignatureIfPresent($dto->customerInCharge,     $dto->localId, 'customer');
+            $biomedPath  = $this->storeSignatureIfPresent($dto->biomedPersonInCharge, $dto->localId, 'biomed');
 
             // Phase 3: fill the DB columns
             $report->fill([
@@ -149,5 +152,31 @@ class SubmitServiceReport
         }
 
         return $report;
+    }
+
+    /**
+     * Persist a signature only if it actually contains a valid
+     * pad drawing. Returns the relative storage path, or null
+     * if the pad is empty/invalid (which is now a valid state
+     * for a partial TSR as of 2026-07-30).
+     */
+    protected function storeSignatureIfPresent(\App\DataTransferObjects\SignatureBlob $blob, string $localId, string $role): ?string
+    {
+        // Empty pad = no dataUrl = nothing to store.
+        if ($blob->dataUrl === '' || $blob->dataUrl === null) {
+            return null;
+        }
+        if (! $blob->isValid()) {
+            // A user-typed dataUrl that didn't decode (or was
+            // shorter than 200 bytes of a real pad). Treat as
+            // missing rather than throwing — the validator
+            // already accepted the field as nullable.
+            Log::info('TSR signature pad present but invalid; treating as missing', [
+                'local_id' => $localId,
+                'role'     => $role,
+            ]);
+            return null;
+        }
+        return $this->signatures->store($blob, $localId, $role);
     }
 }

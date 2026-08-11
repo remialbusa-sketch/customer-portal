@@ -89,6 +89,27 @@ class TspDashboardController extends Controller
             ]);
         }
 
+        // Region guard: the Available pool is already scoped to the
+        // TSP's region via unclaimedTicketsForRegion(), but this POST
+        // route accepts an arbitrary ticket id, so re-verify the
+        // ticket's customer region here BEFORE writing to Monday.
+        // Without this a TSP could claim a ticket outside their
+        // region by posting a crafted ticket id.
+        $tspRegion = $user->region;
+        if (empty($tspRegion)) {
+            $tspRegion = \App\Support\RegionResolver::resolveForCustomer($user);
+        }
+        if (empty($tspRegion) || ! $monday->ticketIsInRegion((int) $id, $tspRegion)) {
+            Log::warning('TspDashboardController::claim rejected — ticket outside TSP region', [
+                'ticket_id' => $id,
+                'user_id'   => $user->id,
+                'region'    => $tspRegion,
+            ]);
+            return back()->withErrors([
+                'claim' => "Ticket #{$id} is outside your assigned region and cannot be claimed.",
+            ]);
+        }
+
         try {
             $monday->claimTicket((int) $id, (string) $user->monday_id);
         } catch (\Throwable $e) {

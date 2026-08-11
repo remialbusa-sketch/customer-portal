@@ -164,25 +164,65 @@ class MondayClient
 
     /**
      * Return a single item by id, with column values flattened.
+     *
+     * Cached for 5 seconds in the shared cache. The short TTL is
+     * intentional: a single ticket-show page load calls
+     * `getItem()` 1-3 times (once for the ticket itself, once
+     * inside `findOrCreateCustomerItem`'s lookup, once more from
+     * any middleware), and the chat polling endpoint hits it
+     * every 3 seconds. Without this cache, every page load
+     * triggers 1-3 Monday round-trips for the same ticket.
+     *
+     * 5 seconds is short enough that:
+     *   - A TSP claim/assign immediately reflects on the
+     *     customer's next refresh.
+     *   - A status flip from the TSR drainer shows up on the
+     *     next page load (the drainer itself calls
+     *     `forgetItemCache()` to be sure).
+     *   - Monday's rate limit isn't burned by repeated
+     *     reads in the same request lifecycle.
      */
     public function getItem(int $itemId): ?array
     {
-        $graphql = <<<GQL
-        query (\$itemId: ID!) {
-            items(ids: [\$itemId]) {
-                id
-                name
-                group { title }
-                __FRAGMENT__
+        return Cache::remember(
+            "monday.item.{$itemId}",
+            5,
+            function () use ($itemId) {
+                $graphql = <<<GQL
+                query (\$itemId: ID!) {
+                    items(ids: [\$itemId]) {
+                        id
+                        name
+                        group { title }
+                        __FRAGMENT__
+                    }
+                }
+                GQL;
+                $graphql = str_replace('__FRAGMENT__', self::COLUMN_VALUES_FRAGMENT, $graphql);
+
+                $data = $this->query($graphql, ['itemId' => (string) $itemId]);
+                $item = $data['items'][0] ?? null;
+
+                return $item ? $this->normalizeItem($item) : null;
             }
+        );
+    }
+
+    /**
+     * Drop the cached single-item fetches. Call after any mutation
+     * (claim, status change, TSR sync, etc.) that needs immediate
+     * consistency. Pairs with `forgetBoardCache()`.
+     *
+     * @param  int|array<int>  $itemIds
+     */
+    public function forgetItemCache(int|array $itemIds = []): void
+    {
+        if (is_int($itemIds)) {
+            $itemIds = [$itemIds];
         }
-        GQL;
-        $graphql = str_replace('__FRAGMENT__', self::COLUMN_VALUES_FRAGMENT, $graphql);
-
-        $data = $this->query($graphql, ['itemId' => (string) $itemId]);
-        $item = $data['items'][0] ?? null;
-
-        return $item ? $this->normalizeItem($item) : null;
+        foreach ($itemIds as $id) {
+            Cache::forget("monday.item.{$id}");
+        }
     }
 
     /**
@@ -249,17 +289,45 @@ class MondayClient
         if (empty($ids)) {
             return [];
         }
-        return \App\Models\User::query()
+
+        // Per-request memo: a ticket show page that resolves
+        // the same set of TSP ids twice (e.g. the customer view
+        // AND the page footer) only hits the users table once.
+        // The cache is process-local, so it's free (no Redis /
+        // DB hit) and only lives for one request.
+        $cacheKey = 'monday.tsp_names.' . md5(implode(',', $ids));
+        static $requestCache = [];
+        if (isset($requestCache[$cacheKey])) {
+            return $requestCache[$cacheKey];
+        }
+
+        $names = \App\Models\User::query()
             ->whereIn('monday_id', $ids)
             ->whereNotNull('name')
             ->pluck('name', 'monday_id')
             ->map(static fn ($n) => (string) $n)
             ->toArray();
+        $requestCache[$cacheKey] = $names;
+
+        return $names;
     }
 
     // ---------------------------------------------------------------------
     // Convenience: tickets
     // ---------------------------------------------------------------------
+
+    /**
+     * Drop the cached board-items so the next listTickets() call
+     * fetches fresh data from Monday. Call this after any mutation
+     * (claim, status change, etc.) that needs immediate consistency.
+     */
+    public function forgetBoardCache(): void
+    {
+        $boardId = config('services.monday.tickets_board_id');
+        if ($boardId) {
+            Cache::forget("monday.board.{$boardId}.items");
+        }
+    }
 
     /**
      * Pull every ticket and bucket it for the TSP dashboard.
@@ -303,6 +371,16 @@ class MondayClient
 
             $subjectText = $item['column_values'][$cols['subject']]['text'] ?? null;
 
+            // Account name is a lookup column — Monday returns
+            // text/value as null but puts the real string in
+            // display_value. Prefer display_value, then fall back
+            // to text/value.
+            $acctRaw = $item['column_values'][$cols['account_name']] ?? null;
+            $accountName = $acctRaw['display_value']
+                ?? $acctRaw['text']
+                ?? $acctRaw['value']
+                ?? null;
+
             return [
                 'id'                  => $item['id'],
                 'name'                => $item['name'],
@@ -313,6 +391,7 @@ class MondayClient
                 'tsp_person_ids'      => $tspIds,
                 'is_open'             => $isOpen,
                 'subject_text'        => $subjectText,
+                'account_name'        => $accountName,
                 'item'                => $item,
             ];
         }, $items);
@@ -395,6 +474,54 @@ class MondayClient
     }
 
     /**
+     * Server-side region guard for the self-claim flow.
+     *
+     * The Available pool is already scoped by region via
+     * unclaimedTicketsForRegion(), but the claim endpoints accept an
+     * arbitrary ticket id, so we re-verify the ticket's customer
+     * region here BEFORE writing the People column. Without this
+     * guard a TSP could POST a ticket id from another region and
+     * claim it anyway.
+     *
+     * The customer-region lookup mirrors unclaimedTicketsForRegion()
+     * exactly (ticket email column → local customers.region) so a
+     * ticket that appears in a TSP's Available pool always passes,
+     * and a ticket from outside the region is always rejected.
+     *
+     * Returns false for tickets with no email / no matching customer
+     * account, for unknown regions, and for tickets that no longer
+     * exist on Monday — the caller must not claim in those cases.
+     */
+    public function ticketIsInRegion(int $ticketItemId, string $regionCode): bool
+    {
+        $item = $this->getItem($ticketItemId);
+        if (! $item) {
+            return false;
+        }
+
+        $email = strtolower(trim($item['column_values']['email']['text'] ?? ''));
+        if ($email === '') {
+            return false;
+        }
+
+        $region = \App\Models\User::where('email', $email)
+            ->where('role', 'customer')
+            ->value('region');
+
+        if ($region === null) {
+            return false;
+        }
+
+        // Normalize both sides (RegionResolver upgrades legacy
+        // free-text values like "Cebu" → "VISAYAS" and upper-cases),
+        // then compare strictly — same 4-broad taxonomy the pool and
+        // the TSP's own region use.
+        $normalized = \App\Support\RegionResolver::normalizeRegionCode((string) $region);
+
+        return $normalized !== null && $normalized === strtoupper($regionCode);
+    }
+
+    /**
      * Claim a ticket for a TSP: writes their person ID into the People
      * column and flips response_status to "RESPONDED".
      *
@@ -417,7 +544,10 @@ class MondayClient
             ],
         ]);
 
-        // Flip response status
+        // Flip response status: "NOT YET" → "RESPONDED" once a TSP
+        // is assigned. This is the core mutation of the self-claim
+        // flow — a claim that doesn't flip the status is invisible
+        // to the executive KPI board.
         $this->markTicketResponded($ticketItemId);
     }
 
@@ -564,18 +694,34 @@ class MondayClient
     /**
      * Verify a Monday item is still alive (not deleted / archived).
      * Returns false for unknown, deleted, archived, or trashed items.
+     *
+     * Cached for 30 seconds with a negative cache for the
+     * "definitely not active" case. This is the hot path on the
+     * customer ticket-show page (called from
+     * `findOrCreateCustomerItem` to verify the cached
+     * `users.monday_id` is still alive), and on the TSR drainer
+     * (called once per pending TSR to skip rows whose source
+     * ticket is gone — see the 2026-07-30 inactive-ticket
+     * tolerance fix).
      */
     public function itemExists(int|string $itemId): bool
     {
-        $gql = <<<'GQL'
-        query($id: ID!) {
-            items(ids: [$id]) { id state }
-        }
-        GQL;
-        $r = $this->query($gql, ['id' => (string) $itemId]);
-        $state = $r['items'][0]['state'] ?? null;
+        $id = (string) $itemId;
+        return Cache::remember(
+            "monday.item.{$id}.exists",
+            30,
+            function () use ($id) {
+                $gql = <<<'GQL'
+                query($id: ID!) {
+                    items(ids: [$id]) { id state }
+                }
+                GQL;
+                $r = $this->query($gql, ['id' => $id]);
+                $state = $r['items'][0]['state'] ?? null;
 
-        return $state === 'active' || $state === null; // null = legacy / unknown schema
+                return $state === 'active' || $state === null; // null = legacy / unknown schema
+            }
+        );
     }
 
     /**
@@ -1358,7 +1504,18 @@ class MondayClient
     /**
      * Translate a TSR Service Status label into a Tickets board status95
      * label and apply it. Returns the label applied, or null if no
-     * status change is required (e.g. TSR is still OPEN).
+     * status change is required (e.g. TSR is still OPEN, or the
+     * source ticket was archived/deleted on Monday and there is
+     * nothing to write to).
+     *
+     * Tolerant of inactive tickets: if the source ticket is gone
+     * (archived / trashed / soft-deleted) on Monday, we treat the
+     * write as a no-op and return null. Returning null tells the
+     * drainer to mark the local TSR row as Synced and move on, so
+     * the dashboard's "service reports need attention" banner stops
+     * accumulating rows that can never be mirrored. The relation-
+     * stripping fallback in createServiceReportItem() has the same
+     * philosophy; this is its sibling for the status write.
      */
     public function applyTicketStatusFromServiceStatus(string $tsrLabel, int $ticketItemId): ?string
     {
@@ -1371,21 +1528,65 @@ class MondayClient
         $ticketsBoard = (int) config('services.monday.tickets_board_id');
         $statusCol    = config('services.monday.tickets_columns.status');
 
-        $this->writeSingleStatusColumn(
-            boardId: $ticketsBoard,
-            itemId:  $ticketItemId,
-            columnId: $statusCol,
-            label: $newLabel,
-        );
+        // Preflight: if the source ticket is already inactive on
+        // Monday (archived / trashed / soft-deleted), Monday will
+        // reject the upcoming change_column_value with
+        // "Cannot change column value for inactive items". Catch it
+        // here so the drainer doesn't loop forever.
+        if (! $this->itemExists($ticketItemId)) {
+            Log::warning('Skipping ticket status patch: source ticket is inactive on Monday', [
+                'ticket_item_id' => $ticketItemId,
+                'tsr_label'      => $tsrLabel,
+                'new_label'      => $newLabel,
+            ]);
+            return null;
+        }
 
-        // Set resolution_date to today when the service is COMPLETED.
-        if ($tsrLabel === 'COMPLETED') {
-            $this->writeDateColumn(
+        try {
+            $this->writeSingleStatusColumn(
                 boardId: $ticketsBoard,
                 itemId:  $ticketItemId,
-                columnId: config('services.monday.tickets_columns.resolution_date'),
-                date: now()->toDateString(),
+                columnId: $statusCol,
+                label: $newLabel,
             );
+        } catch (MondayApiException $e) {
+            // Race condition: ticket was active at the preflight
+            // above but got archived between then and the actual
+            // write. Treat the same as the preflight skip.
+            if ($e->isInactiveItemError()) {
+                Log::warning('Ticket status write rejected — item went inactive mid-drain', [
+                    'ticket_item_id' => $ticketItemId,
+                    'tsr_label'      => $tsrLabel,
+                    'new_label'      => $newLabel,
+                    'monday_code'    => $e->columnValidationCode()
+                        ?? $e->error['extensions']['code']
+                        ?? null,
+                ]);
+                return null;
+            }
+            throw $e;
+        }
+
+        // Set resolution_date to today when the service is COMPLETED.
+        // This write is best-effort: if the ticket got archived
+        // between the status write and this one, swallow it.
+        if ($tsrLabel === 'COMPLETED') {
+            try {
+                $this->writeDateColumn(
+                    boardId: $ticketsBoard,
+                    itemId:  $ticketItemId,
+                    columnId: config('services.monday.tickets_columns.resolution_date'),
+                    date: now()->toDateString(),
+                );
+            } catch (MondayApiException $e) {
+                if ($e->isInactiveItemError()) {
+                    Log::warning('resolution_date write skipped — ticket inactive', [
+                        'ticket_item_id' => $ticketItemId,
+                    ]);
+                } else {
+                    throw $e;
+                }
+            }
         }
 
         return $newLabel;
@@ -1499,6 +1700,9 @@ class MondayClient
 
     /**
      * Write a single date column on a ticket/board.
+     *
+     * Used by applyTicketStatusFromServiceStatus() to stamp
+     * resolution_date when the service status flips to COMPLETED.
      */
     public function writeDateColumn(int $boardId, int $itemId, string $columnId, string $date): void
     {
@@ -1521,6 +1725,136 @@ class MondayClient
             'columnId' => $columnId,
             'value'    => json_encode((object) ['date' => $date]),
         ]);
+    }
+
+    /**
+     * Alias of forgetBoardCache() with a friendlier, intent-revealing
+     * name. Called by callers (e.g. the open-invite registration flow)
+     * after a write that may have changed the customer board. Public
+     * so it can be mocked in tests.
+     *
+     * @param  int|null  $boardId  Optional. If null, defaults to the
+     *                             customers board.
+     */
+    public function flushCache(?int $boardId = null): void
+    {
+        $target = $boardId ?? (int) config('services.monday.customers_board_id');
+        if ($target) {
+            Cache::forget("monday.board.{$target}.items");
+        }
+    }
+
+    /**
+     * Generic cache-bust by key. Public so it can be mocked in
+     * tests; production callers should normally prefer flushCache()
+     * for the customers board.
+     */
+    public function cacheForget(string $key): void
+    {
+        Cache::forget($key);
+    }
+
+    /**
+     * Create a new customer row on the monday.com Customer Details
+     * board from an open-invite registration. Returns the new item's
+     * id (string) on success, or null on failure.
+     *
+     * @param  array{
+     *     email:        string,
+     *     account_name: string,
+     *     branch:       string,
+     *     region:       string,
+     *     address?:     ?string,
+     * }  $data
+     */
+    public function createCustomerItem(array $data): ?string
+    {
+        $boardId = (int) config('services.monday.customers_board_id');
+        if ($boardId === 0) {
+            throw new RuntimeException('MONDAY_CUSTOMERS_BOARD_ID is not set.');
+        }
+        $cols = config('services.monday.customers_columns');
+
+        $columnValues = [];
+
+        if (! empty($data['email'])) {
+            $columnValues[$cols['email']] = [
+                'email' => (string) $data['email'],
+                'text'  => (string) $data['email'],
+            ];
+        }
+        if (! empty($data['account_name'])) {
+            $columnValues[$cols['account_name']] = (string) $data['account_name'];
+        }
+        if (! empty($data['branch'])) {
+            // Branch is a status-style column on Customer Details. We
+            // use create_labels_if_missing: true on the mutation so a
+            // brand-new branch label is materialised on first use.
+            $columnValues[$cols['branch']] = ['label' => (string) $data['branch']];
+        }
+        if (! empty($data['address'])) {
+            // Address is a `location` column on Customer Details.
+            // Monday requires valid lat/lng — empty strings, null,
+            // or address-only payloads are rejected with
+            // "invalid value, please check our API documentation".
+            // The customer just types a freeform street address,
+            // so we have no coordinates to send. In that case we
+            // simply skip the column — the freeform text is still
+            // persisted on the local users.address row and shown
+            // in the portal UI, but Monday's location column is
+            // left empty (an admin can fill it in later by hand
+            // if they need a pin on the map).
+            //
+            // If a future caller DOES provide real lat/lng (e.g.
+            // a geocoding service), use them.
+            if (isset($data['lat'], $data['lng'])
+                && $data['lat'] !== '' && $data['lat'] !== null
+                && $data['lng'] !== '' && $data['lng'] !== null
+            ) {
+                $columnValues[$cols['address']] = [
+                    'lat'     => (string) $data['lat'],
+                    'lng'     => (string) $data['lng'],
+                    'address' => (string) $data['address'],
+                ];
+            }
+        }
+
+        $itemName = trim(sprintf(
+            '%s — %s',
+            $data['account_name'] ?? 'Customer',
+            $data['email']        ?? '',
+        ));
+
+        $graphql = <<<'GQL'
+        mutation ($boardId: ID!, $itemName: String!, $columnValues: JSON!) {
+            create_item(
+                board_id: $boardId,
+                item_name: $itemName,
+                column_values: $columnValues,
+                create_labels_if_missing: true
+            ) {
+                id
+                name
+            }
+        }
+        GQL;
+
+        try {
+            $resp = $this->query($graphql, [
+                'boardId'      => (string) $boardId,
+                'itemName'     => $itemName,
+                'columnValues' => json_encode((object) $columnValues),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('createCustomerItem: Monday create_item failed', [
+                'email'        => $data['email']        ?? null,
+                'account_name' => $data['account_name'] ?? null,
+                'err'          => $e->getMessage(),
+            ]);
+            return null;
+        }
+
+        return $resp['create_item']['id'] ?? null;
     }
 
     /**

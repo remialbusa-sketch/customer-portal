@@ -31,6 +31,10 @@ Route::middleware(['auth', 'role:customer'])->prefix('')->name('')->group(functi
         ->name('tickets.show');
     Route::post('/tickets/{id}/chat', [CustomerChatController::class, 'send'])
         ->name('tickets.chat.send');
+    // Polling endpoint for real-time chat on shared hosting
+    // (no Pusher). See Customer\ChatController::poll.
+    Route::get('/tickets/{id}/chat/messages', [CustomerChatController::class, 'poll'])
+        ->name('tickets.chat.poll');
 });
 
 // TSP-facing routes (FSE, ITS, Manager, or Admin)
@@ -55,6 +59,11 @@ Route::middleware(['auth', 'role:fse,its,manager,admin'])->prefix('tsp')->name('
     // controller pipeline as a customer-originated send).
     Route::post('/tickets/{id}/chat', [TspChatController::class, 'send'])
         ->name('tickets.chat.send');
+
+    // Polling endpoint for real-time chat on shared hosting.
+    // See Tsp\ChatController::poll.
+    Route::get('/tickets/{id}/chat/messages', [TspChatController::class, 'poll'])
+        ->name('tickets.chat.poll');
 
     // Internal notes (Phase 4): TSP-only, mirrored to a dedicated
     // Monday long-text column.
@@ -109,6 +118,13 @@ Route::middleware(['auth', 'role:fse,its,manager,admin'])->prefix('tsp')->name('
     // tickets.show does.
     Route::get('/tickets/{id}/status.json', [TspInternalNoteController::class, 'statusJson'])
         ->name('tickets.status');
+
+    // POST /tsp/tickets/{id}/acknowledge — record an acknowledgement
+    // for the signed-in TSP. The corresponding GET is signed + public
+    // (see the public block below) so the email-from-phone flow works
+    // even before login.
+    Route::post('/tickets/{id}/acknowledge', [\App\Http\Controllers\Tsp\TspTicketAcknowledgementController::class, 'acknowledge'])
+        ->name('tickets.acknowledge');
 });
 
 // Admin / executive routes. The outer group accepts either `admin`
@@ -157,5 +173,16 @@ Route::get('signatures/{localId}/{role}.png', [\App\Http\Controllers\SignatureFi
     ->middleware('signed')
     ->where('role', 'tsp|customer|biomed')
     ->name('signatures.show');
+
+// Public, time-limited signed confirmation page for TSP ticket
+// acknowledgement. The email link points here; the page renders a
+// human-in-the-loop "Confirm acknowledgement" form that posts to
+// the authed route above. We can't put the POST behind the signed
+// middleware because the auth middleware runs first and would
+// bounce an un-signed-in TSP to /login before we even check the
+// signature.
+Route::get('tsp/tickets/{id}/acknowledge', [\App\Http\Controllers\Tsp\TspTicketAcknowledgementController::class, 'show'])
+    ->middleware('signed')
+    ->name('tsp.tickets.acknowledge.show');
 
 require __DIR__.'/auth.php';

@@ -5,10 +5,12 @@ namespace Tests\Feature\Auth;
 use App\Models\CustomerInvite;
 use App\Models\Machine;
 use App\Models\User;
+use App\Services\MondayCustomerDirectory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Volt\Volt;
+use Mockery;
 use Tests\TestCase;
 
 /**
@@ -19,10 +21,61 @@ use Tests\TestCase;
  *   - Optionally supply a second machine.
  *   - See two Machine rows persisted on the new user, with
  *     is_primary correctly set.
+ *
+ * These invites are SNAPSHOT invites (is_snapshot = true), the
+ * pre-2026-07-01 behavior. The form is locked against the
+ * invite's account_name / branch / region / monday_customer_id.
+ *
+ * We stub MondayCustomerDirectory so the mount() flow can find
+ * a matching customer row on monday.com without hitting the
+ * real API. The directory returns a synthesized row that
+ * mirrors the invite, since the registration component
+ * cross-checks them.
  */
 class RegisterWithMachinesTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Stub the directory so snapshot invite verification
+        // (findByEmail) succeeds in tests. We register a default
+        // row that matches the most common test email; individual
+        // tests can override by re-binding the directory if needed.
+        $directory = Mockery::mock(MondayCustomerDirectory::class);
+        $directory->shouldReceive('findByEmail')
+            ->andReturnUsing(function (string $email) {
+                // Synthesize a monday row that mirrors what the
+                // test's invite carries. The component only
+                // uses this for the "is the customer still
+                // legit?" check + the locked-card hydration.
+                return [
+                    'id'           => '9999999999',
+                    'name'         => 'Test Customer',
+                    'group'        => 'NCR',
+                    'region'       => 'NCR',
+                    'branch'       => 'Test Branch',
+                    'account_name' => 'Test Hospital',
+                    'email'        => strtolower(trim($email)),
+                    'address'      => 'Test address',
+                    'user_status'  => 'Active',
+                    'brand'        => null,
+                    'model'        => null,
+                ];
+            });
+        $directory->shouldReceive('regions')->andReturn(['NCR', 'NORTH LUZON', 'VISAYAS', 'MINDANAO']);
+        $directory->shouldReceive('branches')->andReturn(['Test Branch', 'Quezon City', 'Manila']);
+
+        $this->app->instance(MondayCustomerDirectory::class, $directory);
+    }
+
+    protected function tearDown(): void
+    {
+        Mockery::close();
+        parent::tearDown();
+    }
 
     public function test_primary_machine_is_required_and_secondary_optional(): void
     {
@@ -37,6 +90,7 @@ class RegisterWithMachinesTest extends TestCase
             'region'            => 'NCR',
             'address'           => 'Test address',
             'monday_customer_id'=> '9999999999',
+            'is_snapshot'       => true,
             'expires_at'        => now()->addDays(7),
         ]);
 
@@ -97,6 +151,7 @@ class RegisterWithMachinesTest extends TestCase
             'region'            => 'NCR',
             'address'           => 'Solo',
             'monday_customer_id'=> '8888888888',
+            'is_snapshot'       => true,
             'expires_at'        => now()->addDays(7),
         ]);
 
@@ -128,6 +183,7 @@ class RegisterWithMachinesTest extends TestCase
             'region'            => 'NCR',
             'address'           => 'No Brand',
             'monday_customer_id'=> '7777777777',
+            'is_snapshot'       => true,
             'expires_at'        => now()->addDays(7),
         ]);
 

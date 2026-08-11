@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Mail\CustomerInviteMail;
 use App\Models\CustomerInvite;
 use App\Models\User;
 use App\Services\MondayCustomerDirectory;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 
 /**
@@ -44,6 +47,7 @@ class InviteController extends Controller
             'email'               => ['required', 'email:rfc', 'max:191'],
             'ttl'                 => ['nullable', 'integer', 'min:1', 'max:365'],
             'invalidate_existing' => ['nullable', 'boolean'],
+            'send_email'          => ['nullable', 'boolean'],
         ]);
 
         $email = strtolower(trim($data['email']));
@@ -88,11 +92,37 @@ class InviteController extends Controller
 
         $url = url(route('register.withInvite', ['token' => $invite->token], false));
 
+        // Try to email the customer the invite. We never let an SMTP
+        // hiccup fail the request — the admin still gets the URL on
+        // screen so they can copy/paste it manually.
+        $emailed = false;
+        if ($request->boolean('send_email')) {
+            try {
+                Mail::to($email)->send(new CustomerInviteMail(
+                    invite:        $invite,
+                    url:           $url,
+                    invitedByName: auth()->user()?->name,
+                ));
+                $emailed = true;
+            } catch (\Throwable $e) {
+                Log::warning('CustomerInviteMail send failed', [
+                    'email'  => $email,
+                    'invite' => $invite->id,
+                    'error'  => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $status = $emailed
+            ? "Invite created for {$email} and emailed to them."
+            : "Invite created for {$email}.";
+
         return redirect()
             ->route('admin.invites')
-            ->with('status', "Invite created for {$email}.")
+            ->with('status', $status)
             ->with('invite_url', $url)
             ->with('invite_email', $email)
-            ->with('invite_expires_at', $invite->expires_at->toDayDateTimeString());
+            ->with('invite_expires_at', $invite->expires_at->toDayDateTimeString())
+            ->with('invite_emailed', $emailed);
     }
 }

@@ -38,6 +38,8 @@ class TicketCreated implements ShouldBroadcastNow
      * @param  string|null  $brand       Affected machine brand, if known
      * @param  string|null  $model       Affected machine model, if known
      * @param  string|null  $requestType 'Issue' | 'Request'
+     * @param  string|null  $customerName  Name of the customer who opened the ticket (for the TSP alert email)
+     * @param  string|null  $customerEmail  Email of the customer (reply-to in the TSP alert email)
      */
     public function __construct(
         public string $mondayTicketId,
@@ -46,6 +48,8 @@ class TicketCreated implements ShouldBroadcastNow
         public ?string $brand = null,
         public ?string $model = null,
         public ?string $requestType = null,
+        public ?string $customerName = null,
+        public ?string $customerEmail = null,
     ) {
     }
 
@@ -79,6 +83,26 @@ class TicketCreated implements ShouldBroadcastNow
             'model'            => $this->model,
             'request_type'     => $this->requestType,
             'created_at'       => now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Field map consumed by the SendTspAlertForNewTicket listener.
+     * Kept separate from broadcastWith() because the email needs the
+     * customer identity fields (not useful in the realtime toast)
+     * and we don't want to bloat the websocket payload.
+     */
+    public function alertPayload(): array
+    {
+        return [
+            'monday_ticket_id' => $this->mondayTicketId,
+            'region_code'      => $this->regionCode,
+            'subject'          => $this->subject,
+            'brand'            => $this->brand,
+            'model'            => $this->model,
+            'request_type'     => $this->requestType,
+            'customer_name'    => $this->customerName,
+            'customer_email'   => $this->customerEmail,
         ];
     }
 }
