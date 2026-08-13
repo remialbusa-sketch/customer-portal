@@ -6,9 +6,9 @@
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <meta name="theme-color" content="#0A2540">
 
-        <title>{{ config('app.name', 'BioTechnical Solutions') }} — @yield('title', 'Customer Portal')</title>
+        <title>{{ config('app.name', 'MCBIO SERVICE PORTAL') }} — @yield('title', 'Customer Portal')</title>
 
-        <link rel="icon" type="image/svg+xml" href="{{ asset('images/brand/favicon.svg') }}">
+        <link rel="icon" type="image/png" href="{{ asset('images/brand/favicon-mcbio.png') }}">
 
         {{-- Fonts: Inter (UI) + Plus Jakarta Sans (display) --}}
         <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
@@ -43,7 +43,7 @@
                 <div class="relative z-10 px-10 py-12">
                     <p class="text-xs font-semibold uppercase tracking-[0.25em] text-white/70">Service portal</p>
                     <h1 class="mt-3 font-display text-3xl font-bold leading-tight text-white">
-                        BioTechnical Solutions
+                        MC BioTechnical Solutions
                     </h1>
                     <p class="mt-5 max-w-md text-base leading-relaxed text-white/80">
                         The internal portal for our customers, technicians, and managers.
@@ -57,9 +57,8 @@
                 </div>
 
                 <div class="relative z-10 p-10">
-                    <p class="font-display text-sm font-semibold italic text-white/70">
-                        &mdash; Providing Services Beyond Expectations
-                    </p>
+                    {{-- Intentionally empty: the tagline already appears
+                         once at the bottom of the centre panel above. --}}
                 </div>
             </aside>
 

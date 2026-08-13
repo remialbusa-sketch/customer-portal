@@ -5,7 +5,9 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'Laravel') }} — BioTechnical Solutions</title>
+        <title>{{ config('app.name', 'MCBIO SERVICE PORTAL') }}</title>
+
+        <link rel="icon" type="image/png" href="{{ asset('images/brand/favicon-mcbio.png') }}">
 
         {{-- Fonts: Inter for UI, Plus Jakarta Sans for display --}}
         <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>

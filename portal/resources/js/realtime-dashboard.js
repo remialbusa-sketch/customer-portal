@@ -35,6 +35,8 @@
 
 const TICKET_CREATED = 'ticket.created';
 const TICKET_CLAIMED = 'ticket.claimed';
+const TRANSFER_REQUESTED = 'transfer.requested';
+const TICKET_TRANSFERRED = 'ticket.transferred';
 
 const subscriptionRegistry = window.__realtimeDashboardSubscriptions ??= new Set();
 let initialized = false;
@@ -86,6 +88,12 @@ function subscribeRegionChannels(echo, regionCode) {
                 })
                 .listen('.ticket.claimed', (e) => {
                     dispatchLivewire(TICKET_CLAIMED, e);
+                })
+                .listen('.ticket.transfer_requested', (e) => {
+                    dispatchLivewire(TRANSFER_REQUESTED, e);
+                })
+                .listen('.ticket.transferred', (e) => {
+                    dispatchLivewire(TICKET_TRANSFERRED, e);
                 });
         } catch (err) {
             // Pusher / Echo may not be configured in the dev

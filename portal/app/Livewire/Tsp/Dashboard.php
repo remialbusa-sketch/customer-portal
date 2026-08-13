@@ -7,7 +7,11 @@ namespace App\Livewire\Tsp;
 use App\Actions\SyncPendingTsrReports;
 use App\Enums\SyncState;
 use App\Events\TicketClaimed;
+use App\Events\TicketTransferRequested;
+use App\Events\TicketTransferred;
 use App\Models\ServiceReport;
+use App\Models\TicketTransfer;
+use App\Models\User;
 use App\Services\MondayClient;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Log;
@@ -150,6 +154,73 @@ class Dashboard extends Component
      * @var ?array{id:string, name:string, status_text:?string, subject_text:?string, account_name:?string, item:array}
      */
     public ?array $claimingTicket = null;
+
+    // -----------------------------------------------------------------
+    // Ticket-transfer state (TSP-to-TSP handoff)
+    // -----------------------------------------------------------------
+
+    /**
+     * Pending transfer requests addressed to the current user —
+     * each carries the requester's name and a ticket label so the
+     * "Incoming transfer requests" card can render without another
+     * Monday round-trip.
+     *
+     * @var array<int, array{id:int, monday_ticket_id:string, from_name:string, from_region:?string, ticket_label:string, created_at:?string}>
+     */
+    public array $incomingTransfers = [];
+
+    /**
+     * The current user's OWN pending requests (outgoing). Used to
+     * render a small "Transfer pending" note on the affected ticket
+     * row and to power the Cancel action.
+     *
+     * @var array<int, array{id:int, monday_ticket_id:string, to_name:string, status:string}>
+     */
+    public array $myPendingTransfers = [];
+
+    /**
+     * Ticket id while the transfer-target picker modal is open.
+     * Null when the modal is hidden.
+     */
+    public ?string $transferTicketId = null;
+
+    /**
+     * Monday item name (e.g. "TICKET-00079") of the ticket in the
+     * transfer modal, for display. Empty when the name is unknown.
+     */
+    public ?string $transferTicketName = null;
+
+    /**
+     * Cached list of candidate target TSPs for the open transfer
+     * modal: every TSP in scope except the current user and anyone
+     * already assigned to the ticket. Members without a Monday
+     * person id are included with `assignable: false` so the list
+     * reflects the full roster (the UI renders them disabled with
+     * the reason). Scoped to the same branch by default; "all"
+     * includes every region (used when the local branch has no
+     * available TSPs).
+     *
+     * @var array<int, array{id:int, name:string, email:string, region:?string, assignable:bool}>
+     */
+    public array $transferTargets = [];
+
+    /**
+     * Branch scope of the transfer-target picker:
+     *   'same' — TSPs in the current user's own region only (default)
+     *   'all'  — TSPs across all four branches (cross-branch handoff)
+     */
+    public string $transferScope = 'same';
+
+    /**
+     * Selected target user id in the transfer modal (wire:model).
+     */
+    public ?int $transferToUserId = null;
+
+    /**
+     * True while a transfer request or accept is in flight, so the
+     * buttons disable against double-clicks.
+     */
+    public bool $transferring = false;
 
     /**
      * Client-side filter state for both ticket lists. Bound with
@@ -328,6 +399,75 @@ class Dashboard extends Component
         $this->availableTickets = array_values($available);
         $this->stats            = $stats;
         $this->errorReports     = $errorReports;
+
+        // Transfer requests are local-DB state, so they never go
+        // through the Monday round-trip — cheap to refresh on every
+        // load.
+        $this->loadIncomingTransfers($monday);
+        $this->loadMyPendingTransfers();
+    }
+
+    /**
+     * Reload pending transfer requests addressed to the current user.
+     * The ticket label is resolved from the last known ticket info
+     * (Monday item name via getItem, cached) with a "#id" fallback.
+     */
+    protected function loadIncomingTransfers(MondayClient $monday): void
+    {
+        $user = auth()->user();
+
+        $this->incomingTransfers = TicketTransfer::query()
+            ->where('to_user_id', $user->id)
+            ->where('status', TicketTransfer::STATUS_PENDING)
+            ->with('fromUser:id,name,region')
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get()
+            ->map(function (TicketTransfer $t) use ($monday) {
+                $label = "Ticket #{$t->monday_ticket_id}";
+                $item  = $monday->getItem((int) $t->monday_ticket_id);
+                if ($item) {
+                    $label = ($item['name'] ?? '') !== ''
+                        ? $item['name']
+                        : $label;
+                }
+
+                return [
+                    'id'               => (int) $t->id,
+                    'monday_ticket_id' => (string) $t->monday_ticket_id,
+                    'from_name'        => (string) ($t->fromUser?->name ?? 'A TSP'),
+                    'from_region'      => $t->fromUser?->region,
+                    'ticket_label'     => $label,
+                    'created_at'       => optional($t->created_at)->diffForHumans(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Reload the current user's own pending (outgoing) requests so
+     * the affected ticket rows can show a "Transfer pending" hint
+     * and a Cancel action.
+     */
+    protected function loadMyPendingTransfers(): void
+    {
+        $user = auth()->user();
+
+        $this->myPendingTransfers = TicketTransfer::query()
+            ->where('from_user_id', $user->id)
+            ->where('status', TicketTransfer::STATUS_PENDING)
+            ->with('toUser:id,name')
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get()
+            ->map(fn (TicketTransfer $t) => [
+                'id'               => (int) $t->id,
+                'monday_ticket_id' => (string) $t->monday_ticket_id,
+                'to_name'          => (string) ($t->toUser?->name ?? 'a TSP'),
+            ])
+            ->values()
+            ->all();
     }
 
     // ---------------------------------------------------------------------
@@ -376,7 +516,12 @@ class Dashboard extends Component
 
     /**
      * Claim an unclaimed ticket: write the TSP's person ID into
-     * the People column on Monday and flip the response status.
+     * the People column on Monday and flip status95 to "AWAITING"
+     * (so the ticket counts under the Awaiting card).
+     *
+     * response_status stays "NOT YET" until the TSP actually
+     * replies via chat (Tsp\ChatController::send flips it to
+     * "RESPONDED") — a claim is not a response.
      *
      * After a successful claim:
      *   - The ticket is removed from `availableTickets` (it now
@@ -482,6 +627,396 @@ class Dashboard extends Component
         ));
 
         $this->dispatch('toast', type: 'success', title: 'Ticket claimed', body: "Ticket #{$id} is now in your queue.");
+    }
+
+    // ---------------------------------------------------------------------
+    // Ticket transfer (TSP-to-TSP handoff)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Open the transfer-target picker modal for one of my tickets.
+     * Only the current assignee may initiate a transfer, and only
+     * while the ticket is still open.
+     *
+     * The modal opens even when the current branch has no candidates
+     * — the TSP can then switch the scope to "all branches" for a
+     * cross-branch handoff (e.g. their region has no available TSP).
+     */
+    public function openTransfer(string $id, MondayClient $monday): void
+    {
+        $user   = auth()->user();
+        $ticket = null;
+        foreach ($this->myTickets as $t) {
+            if ((string) $t['id'] === $id) {
+                $ticket = $t;
+                break;
+            }
+        }
+        if (! $ticket) {
+            $this->dispatch('toast', type: 'error', title: 'Not your ticket', body: "Ticket #{$id} is not in your queue anymore.");
+            return;
+        }
+
+        // Only the TSP who is actually assigned can hand it over.
+        $mine = in_array((string) $user->monday_id, array_map('strval', $ticket['tsp_person_ids'] ?? []), true);
+        if (! $mine) {
+            $this->dispatch('toast', type: 'error', title: 'Not your ticket', body: "Ticket #{$id} is not assigned to you.");
+            return;
+        }
+
+        $status = strtolower((string) ($ticket['status_text'] ?? ''));
+        if (str_contains($status, 'resolved')
+            || str_contains($status, 'closed')
+            || str_contains($status, 'done')
+            || str_contains($status, 'complete')
+        ) {
+            $this->dispatch('toast', type: 'error', title: 'Ticket closed', body: "Ticket #{$id} is already resolved and can't be transferred.");
+            return;
+        }
+
+        $this->transferTicketId   = $id;
+        $this->transferTicketName = (string) ($ticket['name'] ?? '');
+        $this->transferScope      = 'same';
+        $this->transferToUserId   = null;
+        $this->loadTransferTargets();
+    }
+
+    /**
+     * (Re)build the candidate TSP list for the open transfer modal
+     * from the current scope: same region only, or all four branches.
+     * Shared by openTransfer() and the updatedTransferScope() hook so
+     * toggling the scope in the modal re-filters live.
+     */
+    protected function loadTransferTargets(): void
+    {
+        $this->transferTargets = [];
+
+        if ($this->transferTicketId === null) {
+            return;
+        }
+
+        $user   = auth()->user();
+        $ticket = null;
+        foreach ($this->myTickets as $t) {
+            if ((string) $t['id'] === $this->transferTicketId) {
+                $ticket = $t;
+                break;
+            }
+        }
+        if (! $ticket) {
+            return;
+        }
+
+        $crossBranch = $this->transferScope === 'all';
+        $tspRegion   = $user->region
+            ?: \App\Support\RegionResolver::resolveForCustomer($user);
+
+        if (! $crossBranch && $tspRegion === null) {
+            return;
+        }
+
+        $assignedMondayIds = array_map('intval', $ticket['tsp_person_ids'] ?? []);
+        $directory         = \App\Support\PersonnelDirectory::forCustomerAssignment(
+            $crossBranch ? null : $tspRegion,
+        );
+
+        $targets = [];
+        foreach ($directory as $group) {
+            foreach ($group['members'] as $member) {
+                if ((int) $member['id'] === (int) $user->id) {
+                    continue;
+                }
+                if (in_array((int) $member['monday_id'], $assignedMondayIds, true)) {
+                    continue;
+                }
+                $targets[] = [
+                    'id'         => (int) $member['id'],
+                    'name'       => (string) $member['name'],
+                    'email'      => (string) $member['email'],
+                    'region'     => $member['region'],
+                    'assignable' => $member['assignable'],
+                ];
+            }
+        }
+
+        $this->transferTargets = array_values($targets);
+    }
+
+    /**
+     * Toggle the branch scope of the transfer modal (same branch /
+     * all branches). The previous selection may not exist in the new
+     * list, so it is reset.
+     */
+    public function setTransferScope(string $scope): void
+    {
+        if (! in_array($scope, ['same', 'all'], true) || $scope === $this->transferScope) {
+            return;
+        }
+
+        $this->transferScope    = $scope;
+        $this->transferToUserId = null;
+        $this->loadTransferTargets();
+    }
+
+    /**
+     * Close the transfer modal without sending a request.
+     */
+    public function cancelTransfer(): void
+    {
+        $this->transferTicketId   = null;
+        $this->transferTicketName = null;
+        $this->transferTargets    = [];
+        $this->transferToUserId   = null;
+        $this->transferring     = false;
+
+        // The modal's Alpine handler removes the body scroll lock on
+        // this event; dispatching from the server guarantees the lock
+        // is released even when the modal disappears mid-round-trip
+        // (e.g. after a successful requestTransfer).
+        $this->dispatch('close-transfer-modal');
+    }
+
+    /**
+     * Send a transfer request to the selected TSP. Creates a PENDING
+     * TicketTransfer row and notifies the target via the region.all
+     * Pusher channel (the target's 20s poll is the fallback). Nothing
+     * is written to Monday.com yet — the People column only changes
+     * when the target ACCEPTS.
+     */
+    public function requestTransfer(MondayClient $monday): void
+    {
+        if ($this->transferring) {
+            return;
+        }
+        $user = auth()->user();
+        $id   = $this->transferTicketId;
+        if ($id === null || $this->transferToUserId === null) {
+            return;
+        }
+
+        $target = User::query()
+            ->where('id', $this->transferToUserId)
+            ->whereIn('role', ['fse', 'its'])
+            ->whereNotNull('monday_id')
+            ->first(['id', 'name', 'monday_id']);
+        if (! $target) {
+            $this->dispatch('toast', type: 'error', title: 'Not available', body: 'That TSP is no longer available for transfers.');
+            return;
+        }
+
+        // One pending request per (ticket, target) — re-sending to
+        // the same TSP is a no-op instead of a stack of duplicates.
+        $existing = TicketTransfer::query()
+            ->where('monday_ticket_id', $id)
+            ->where('to_user_id', $target->id)
+            ->where('status', TicketTransfer::STATUS_PENDING)
+            ->exists();
+        if ($existing) {
+            $this->dispatch('toast', type: 'info', title: 'Already requested', body: "You already have a pending transfer request to {$target->name} for ticket #{$id}.");
+            $this->cancelTransfer();
+            return;
+        }
+
+        $this->transferring = true;
+
+        try {
+            $transfer = TicketTransfer::create([
+                'monday_ticket_id' => $id,
+                'from_user_id'     => $user->id,
+                'to_user_id'       => $target->id,
+                'status'           => TicketTransfer::STATUS_PENDING,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Dashboard::requestTransfer failed to persist', [
+                'ticket_id' => $id,
+                'to_user'   => $target->id,
+                'error'     => $e->getMessage(),
+            ]);
+            $this->transferring = false;
+            $this->dispatch('toast', type: 'error', title: 'Could not request', body: 'Something went wrong saving the request. Please try again.');
+            return;
+        }
+
+        $this->cancelTransfer();
+
+        // Notify the target through the shared TSP channel. Their
+        // dashboard shows the "Incoming transfer requests" card.
+        event(new TicketTransferRequested(
+            mondayTicketId: $id,
+            fromUserId:     (int) $user->id,
+            fromName:       (string) $user->name,
+            toUserId:       (int) $target->id,
+            toName:         (string) $target->name,
+        ));
+
+        $this->loadMyPendingTransfers();
+
+        $this->dispatch('toast', type: 'success', title: 'Transfer requested', body: "{$target->name} needs to accept ticket #{$id} before it moves. They'll see the request on their dashboard.");
+    }
+
+    /**
+     * Cancel one of my own pending transfer requests. The assignment
+     * never changed on Monday, so this is a local state change only.
+     */
+    public function cancelPendingTransfer(int $transferId): void
+    {
+        $transfer = TicketTransfer::query()
+            ->where('id', $transferId)
+            ->where('from_user_id', auth()->id())
+            ->where('status', TicketTransfer::STATUS_PENDING)
+            ->first();
+
+        if (! $transfer) {
+            $this->dispatch('toast', type: 'error', title: 'Not found', body: 'That request is no longer pending.');
+            return;
+        }
+
+        $transfer->update([
+            'status'      => TicketTransfer::STATUS_CANCELLED,
+            'resolved_at' => now(),
+        ]);
+
+        $this->loadMyPendingTransfers();
+
+        $this->dispatch('toast', type: 'success', title: 'Request cancelled', body: "Ticket #{$transfer->monday_ticket_id} stays with you.");
+    }
+
+    /**
+     * Accept an incoming transfer request. This is the ONLY action
+     * that touches Monday.com: the People column is rewritten to
+     * remove the original assignee and add the accepting TSP, then
+     * both dashboards refresh (the old holder loses the ticket, the
+     * new holder gains it).
+     *
+     * Guarded server-side: only the target TSP (to_user_id) can
+     * accept their own pending request.
+     */
+    public function acceptTransfer(int $transferId, MondayClient $monday): void
+    {
+        $user = auth()->user();
+
+        $transfer = TicketTransfer::query()
+            ->where('id', $transferId)
+            ->where('to_user_id', $user->id)
+            ->where('status', TicketTransfer::STATUS_PENDING)
+            ->first();
+
+        if (! $transfer) {
+            $this->dispatch('toast', type: 'error', title: 'Not found', body: 'That transfer request is no longer pending.');
+            return;
+        }
+
+        if (empty($user->monday_id) || empty($transfer->fromUser->monday_id)) {
+            $this->dispatch('toast', type: 'error', title: 'Missing Monday ID', body: 'The transfer can\'t complete — one of the accounts is missing a Monday person ID.');
+            return;
+        }
+
+        $this->transferring = true;
+
+        try {
+            $monday->reassignTicket(
+                (int) $transfer->monday_ticket_id,
+                (string) $transfer->fromUser->monday_id,
+                (string) $user->monday_id,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Dashboard::acceptTransfer failed on Monday', [
+                'ticket_id'   => $transfer->monday_ticket_id,
+                'transfer_id' => $transfer->id,
+                'error'       => $e->getMessage(),
+            ]);
+            $this->transferring = false;
+            $this->dispatch('toast', type: 'error', title: 'Could not transfer', body: 'Monday.com returned an error. Please try again.');
+            return;
+        }
+
+        $transfer->update([
+            'status'      => TicketTransfer::STATUS_ACCEPTED,
+            'resolved_at' => now(),
+        ]);
+
+        // Bust the board-items cache so loadLists() fetches the new
+        // People column immediately (same pattern as claim()).
+        $monday->forgetBoardCache();
+
+        $this->transferring = false;
+
+        // Tell every TSP dashboard to refresh: the old holder's list
+        // drops the ticket, the new holder's list picks it up.
+        event(new TicketTransferred(
+            mondayTicketId: $transfer->monday_ticket_id,
+            fromUserId:     (int) $transfer->from_user_id,
+            toUserId:       (int) $user->id,
+            toName:         (string) $user->name,
+        ));
+
+        $this->loadLists($monday);
+
+        $this->dispatch('toast', type: 'success', title: 'Transfer accepted', body: "Ticket #{$transfer->monday_ticket_id} is now assigned to you.");
+    }
+
+    /**
+     * Decline an incoming transfer request. The assignment stays with
+     * the original TSP (nothing is written to Monday) and the
+     * requester sees the request no longer on their row.
+     */
+    public function declineTransfer(int $transferId): void
+    {
+        $transfer = TicketTransfer::query()
+            ->where('id', $transferId)
+            ->where('to_user_id', auth()->id())
+            ->where('status', TicketTransfer::STATUS_PENDING)
+            ->first();
+
+        if (! $transfer) {
+            $this->dispatch('toast', type: 'error', title: 'Not found', body: 'That transfer request is no longer pending.');
+            return;
+        }
+
+        $transfer->update([
+            'status'      => TicketTransfer::STATUS_DECLINED,
+            'resolved_at' => now(),
+        ]);
+
+        $this->loadIncomingTransfers(app(MondayClient::class));
+
+        $this->dispatch('toast', type: 'success', title: 'Request declined', body: "Ticket #{$transfer->monday_ticket_id} stays with the current TSP.");
+    }
+
+    /**
+     * A transfer request was broadcast (new request for some TSP).
+     * Reload the request card so the target sees it without waiting
+     * for the 20s poll.
+     */
+    #[On('transfer.requested')]
+    public function handleTransferRequested(MondayClient $monday): void
+    {
+        $this->loadIncomingTransfers($monday);
+    }
+
+    /**
+     * A transfer was accepted elsewhere. Reload everything so the
+     * old holder's "My tickets" drops the ticket and the new
+     * holder's list picks it up.
+     */
+    #[On('ticket.transferred')]
+    public function handleTicketTransferred(array $payload, MondayClient $monday): void
+    {
+        $toId = (int) ($payload['to_user_id'] ?? 0);
+
+        if ($toId === (int) auth()->id()) {
+            // This TSP just received the ticket via an accept that
+            // happened on ANOTHER TSP's session.
+            $monday->forgetBoardCache();
+            $this->loadLists($monday);
+            $ticketId = (string) ($payload['monday_ticket_id'] ?? '');
+            $this->dispatch('toast', type: 'info', title: 'Ticket transferred to you', body: "Ticket #{$ticketId} was transferred to you by another TSP's action.");
+            return;
+        }
+
+        // Someone else's handoff — a light refresh is enough to drop
+        // the ticket from this TSP's list if it was theirs.
+        $this->loadLists($monday);
     }
 
     /**
@@ -734,13 +1269,20 @@ class Dashboard extends Component
             // error on an undefined key in PHP 8.1+.
             $claimed = [
                 'id'           => $id,
-                'status_text'  => 'Working on it',
+                'status_text'  => 'AWAITING',
                 'name'         => "Ticket #{$id}",
                 'subject_text' => null,
                 'account_name' => null,
                 'tsp_person_ids' => [],
                 'item'         => ['column_values' => []],
             ];
+        } else {
+            // claimTicket() flipped status95 to "AWAITING" on Monday;
+            // the copy we lifted from the available pool still carries
+            // the pre-claim status (e.g. "OPEN"). Overwrite it so the
+            // optimistic stats bucket this ticket under Awaiting right
+            // away instead of waiting for the next loadLists() poll.
+            $claimed['status_text'] = 'AWAITING';
         }
         // Mark the ticket as "claimed just now" — annotate the
         // list. We don't actually need this in the view, but it

@@ -124,16 +124,18 @@ new class extends Component
         </div>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div class="rounded-xl bg-base-200/50 p-4 border border-base-300/70">
+    <div class="rounded-xl bg-base-200/50 p-4 border border-base-300/70">
+        <div class="flex items-center justify-between">
             <div class="text-xs uppercase tracking-wider text-base-content/60">Total on this ticket</div>
-            <div class="text-2xl font-bold text-base-content mt-1" x-text="formatTotal(total)">—</div>
+            <div class="text-xs text-base-content/60" x-text="activeLabel"></div>
         </div>
-        <div class="rounded-xl bg-base-200/50 p-4 border border-base-300/70">
-            <div class="text-xs uppercase tracking-wider text-base-content/60">Current session</div>
-            <div class="text-2xl font-bold text-base-content mt-1" x-text="formatElapsed(elapsedSeconds)">0m 00s</div>
-            <div class="text-xs text-base-content/60 mt-1" x-text="activeLabel"></div>
-        </div>
+        <div class="text-2xl font-bold text-base-content mt-1" x-text="formatTotal(total)">—</div>
+        <template x-if="active">
+            <div class="mt-2 pt-2 border-t border-base-300/50 flex items-baseline justify-between gap-3">
+                <span class="text-xs uppercase tracking-wider text-base-content/60">Current session</span>
+                <span class="text-sm font-semibold text-base-content" x-text="formatElapsed(elapsedSeconds)">0m 00s</span>
+            </div>
+        </template>
     </div>
 
     {{-- The time tracker is now a read-only reflection of Monday's

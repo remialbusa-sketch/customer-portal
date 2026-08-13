@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\TicketStatusChanged;
 use App\Exceptions\MondayApiException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -523,7 +524,13 @@ class MondayClient
 
     /**
      * Claim a ticket for a TSP: writes their person ID into the People
-     * column and flips response_status to "RESPONDED".
+     * column and flips the status95 to "AWAITING" so the ticket counts
+     * as awaiting on the TSP dashboard.
+     *
+     * NOTE: claiming does NOT flip response_status to "RESPONDED" —
+     * that only happens once the TSP actually replies to the ticket
+     * via the chat (see Tsp\ChatController::send). A claim alone is
+     * not a response.
      *
      * This is the core mutation for the self-claim flow. The TSP's
      * local user record must have a monday_id (person ID on Monday).
@@ -544,11 +551,77 @@ class MondayClient
             ],
         ]);
 
-        // Flip response status: "NOT YET" → "RESPONDED" once a TSP
-        // is assigned. This is the core mutation of the self-claim
-        // flow — a claim that doesn't flip the status is invisible
-        // to the executive KPI board.
-        $this->markTicketResponded($ticketItemId);
+        // Move the ticket into the "awaiting" state. Without this the
+        // status95 column stays "OPEN" and the claimed ticket counts
+        // under Open on the TSP dashboard instead of Awaiting (the
+        // monday.com automation that used to flip it was unreliable).
+        // create_labels_if_missing: true means the label is created on
+        // the board the first time if it isn't defined yet.
+        $this->writeSingleStatusColumn(
+            boardId:  $boardId,
+            itemId:   $ticketItemId,
+            columnId: (string) config('services.monday.tickets_columns.status'),
+            label:    'AWAITING',
+        );
+    }
+
+    /**
+     * Reassign a ticket from one TSP to another: reads the current
+     * People column, removes $fromPersonId, ensures $toPersonId is
+     * present, and writes the result back.
+     *
+     * Used by the TSP-to-TSP transfer flow AFTER the receiving TSP
+     * has accepted the handoff (see TicketTransfer). The original
+     * assignee is removed so the ticket shows up under the new TSP's
+     * "My tickets" and drops from the old TSP's list. Co-assignees
+     * (e.g. ITS coverage) are preserved. status95 is left untouched —
+     * the ticket stays in its current (e.g. AWAITING) state.
+     *
+     * @param  int     $ticketItemId  Monday item id of the ticket
+     * @param  string  $fromPersonId  Monday person id being removed
+     * @param  string  $toPersonId    Monday person id being added
+     */
+    public function reassignTicket(int $ticketItemId, string $fromPersonId, string $toPersonId): void
+    {
+        $boardId = (int) config('services.monday.tickets_board_id');
+        $tspCol  = (string) config('services.monday.tickets_columns.tsp');
+
+        $people = [];
+        $item   = $this->getItem($ticketItemId);
+        if ($item) {
+            $raw = $item['column_values'][$tspCol]['value'] ?? null;
+            if (is_string($raw)) {
+                $decoded = json_decode($raw, true);
+            } elseif (is_array($raw)) {
+                $decoded = $raw;
+            } else {
+                $decoded = [];
+            }
+
+            foreach (($decoded['personsAndTeams'] ?? []) as $row) {
+                $personId = (int) ($row['id'] ?? 0);
+                if ($personId > 0 && $personId !== (int) $fromPersonId) {
+                    $people[$personId] = [
+                        'id'   => $personId,
+                        'kind' => $row['kind'] ?? 'person',
+                    ];
+                }
+            }
+        }
+
+        // Add the new assignee (deduped by person id). Even if the
+        // old person id is somehow not on the ticket, the write still
+        // lands the new assignee — Monday accepts a no-op removal.
+        $people[(int) $toPersonId] = [
+            'id'   => (int) $toPersonId,
+            'kind' => 'person',
+        ];
+
+        $this->changeColumnValues($boardId, $ticketItemId, [
+            $tspCol => [
+                'personsAndTeams' => array_values($people),
+            ],
+        ]);
     }
 
     /**
@@ -1610,6 +1683,15 @@ class MondayClient
      * Best-effort: callers (e.g. TicketController::store) should not
      * let a failure here block the redirect — the customer has
      * already submitted the ticket. Log the failure and continue.
+     *
+     * As a side effect, once a TSP has actually responded the ticket
+     * also moves out of the "AWAITING" state into "IN-PROGRESS" —
+     * the first chat reply means work has started. The transition is
+     * guarded: it only fires from AWAITING, never downgrades a ticket
+     * that has already moved on (Working on it, ESCALATED,
+     * COMPLETED, ...). A realtime TicketStatusChanged event is
+     * broadcast so the customer dashboard / ticket page can refresh
+     * its status pill instantly.
      */
     public function markTicketResponded(int $ticketItemId): void
     {
@@ -1626,12 +1708,51 @@ class MondayClient
             return;
         }
 
+        // Read the current status95 BEFORE any write (and skip the 5s
+        // item cache) so the AWAITING → IN-PROGRESS guard below sees
+        // the pre-response state of the ticket.
+        $statusColId     = (string) config('services.monday.tickets_columns.status');
+        $previousStatus  = null;
+        if ($statusColId !== '') {
+            $this->forgetItemCache($ticketItemId);
+            $item = $this->getItem($ticketItemId);
+            $previousStatus = (string) ($item['column_values'][$statusColId]['text'] ?? '');
+        }
+
         $this->writeSingleStatusColumn(
             boardId: $boardId,
             itemId:  $ticketItemId,
             columnId: $colId,
             label: 'RESPONDED',
         );
+
+        if ($statusColId === '' || strtoupper(trim($previousStatus)) !== 'AWAITING') {
+            return;
+        }
+
+        try {
+            $this->writeSingleStatusColumn(
+                boardId:  $boardId,
+                itemId:   $ticketItemId,
+                columnId: $statusColId,
+                label:    'IN-PROGRESS',
+            );
+            $this->forgetItemCache($ticketItemId);
+
+            broadcast(new TicketStatusChanged(
+                mondayTicketId: (string) $ticketItemId,
+                previousStatus: $previousStatus,
+                newStatus:      'IN-PROGRESS',
+            ));
+        } catch (\Throwable $e) {
+            // Best-effort: the chat message itself already landed.
+            // A hiccup flipping the status column must not 500 the
+            // TSP's send — the 20s poll will surface the new state.
+            Log::warning('markTicketResponded: AWAITING → IN-PROGRESS flip failed', [
+                'ticket_id' => $ticketItemId,
+                'error'     => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

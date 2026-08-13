@@ -5,14 +5,6 @@ use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
 
 Route::middleware('guest')->group(function () {
-    // Bare /register — friendly "ask your coordinator" page.
-    Volt::route('register', 'pages.auth.register')
-        ->name('register');
-
-    // /register/{token} — the real form, pre-filled from the invite.
-    Volt::route('register/{token}', 'pages.auth.register')
-        ->name('register.withInvite');
-
     Volt::route('login', 'pages.auth.login')
         ->name('login');
 
@@ -33,4 +25,8 @@ Route::middleware('auth')->group(function () {
 
     Volt::route('confirm-password', 'pages.auth.confirm-password')
         ->name('password.confirm');
+
+    // Forced first-login password change for auto-provisioned accounts.
+    Volt::route('password/change', 'pages.auth.change-password')
+        ->name('password.change');
 });

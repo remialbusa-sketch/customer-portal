@@ -33,9 +33,12 @@ final class MondayColumnIds
     public const BOARD_TSR             = 5029041107; // EXTERNAL - TSR
     public const BOARD_CUSTOMERS       = 5029327268; // Customer Details board
 
-    // ─── Tickets board (5028514175) — read-mostly, but we write to status95 ─
-    public const TICKETS_COL_STATUS          = 'status95'; // TODO: verify exact column id
-    public const TICKETS_COL_SUBJECT         = 'text';      // placeholder, verify
+    // ─── Tickets board (5029331350) — read-mostly, but we write to status95 ─
+    public const TICKETS_COL_STATUS          = 'status95'; // verified 2026-08-11: "TICKET STATUS" (status)
+    // NOTE: there is NO dedicated subject column on the live board — the
+    // ticket's subject IS the item name (the `name` column). createTicket()
+    // writes the subject as the item name; findOpenDuplicateTicketForCustomer
+    // reads it back from there.
     public const TICKETS_COL_RESPONSE_STATUS = 'color_mm4vbp35';  // "NOT YET" → "RESPONDED"
     public const TICKETS_COL_TIME_TRACKING   = 'duration_mm4hesrz'; // Monday native time_tracking widget
 
@@ -59,26 +62,19 @@ final class MondayColumnIds
     ];
 
     /**
-     * Status label indices on the Tickets board's status95 column.
-     * These are the values the board's status_picker stores as
-     * `{ "index": N }`. We need the right index for each human label
-     * so a TSR status of "Completed" maps to the exact label the
-     * board expects, not just any label with the same text.
-     *
-     * TODO(verify): read board 5028514175 → column status95 → settings
-     * → labels, then fill in the indices.
-     *
-     * @var array<string, int>
+     * Verified 2026-08-11 from the live board's `status95` settings:
+     *   {"0":"ESCALATED","1":"Resolved","2":"IN-RPOGRESS",
+     *    "3":"Working on it","5":"OPEN","7":"PENDING","11":"COMPLETED"}
+     * (the "IN-RPOGRESS" typo is the board's, verbatim.)
      */
     public const TICKETS_STATUS_LABEL_INDEX = [
-        'Open'           => 0, // verify
-        'Working on it'  => 1, // verify
-        'Waiting for parts' => 2, // verify
-        'Escalated'      => 3, // verify
-        'Resolved'       => 4, // verify
-        'Done'           => 5, // verify
-        'Closed'         => 6, // verify
-        'COMPLETED'      => 11, // verified 2026-07-20 against board 5029331350
+        // 'IN-RPOGRESS' => 2,  // board typo; portal writes 'IN-PROGRESS'
+        'OPEN'           => 5,
+        'Working on it'  => 3,
+        'PENDING'        => 7,
+        'ESCALATED'      => 0,
+        'Resolved'       => 1,
+        'COMPLETED'      => 11,
     ];
 
     // ─── TSR board (5029041107) — written when a TSP submits a report ─
@@ -114,20 +110,25 @@ final class MondayColumnIds
     /**
      * TSR Service Status label indices on the TSR board's color_mm3gbrby
      * column. The TSR board has its own 5-value status (different from
-     * the ticket board's 6-value status), and the portal writes the
-     * TSR's status to this column when a TSP submits or updates a report.
+     * the ticket board's status), and the portal writes the TSR's
+     * status to this column when a TSP submits or updates a report.
      *
-     * TODO(verify): read board 5029041107 → column color_mm3gbrby → settings
-     * → labels, then fill in the indices.
+     * Verified 2026-08-11 from the live board's settings:
+     *   {"0":"IN-PROGRESS","1":"COMPLETED","3":"ESCALATED",
+     *    "4":"PENDING","5":"OPEN"}
+     *
+     * The keys match SyncPendingTsrReports' lookup, which builds them as
+     * strtoupper(str_replace('_', '-', $status->value)) — e.g.
+     * in_progress → "IN-PROGRESS".
      *
      * @var array<string, int>
      */
     public const TSR_STATUS_LABEL_INDEX = [
-        'OPEN'        => 0, // verify
-        'IN-PROGRESS' => 1, // verify
-        'PENDING'     => 2, // verify
-        'ESCALATED'   => 3, // verify
-        'COMPLETED'   => 4, // verify
+        'OPEN'        => 5, // verified
+        'IN-PROGRESS' => 0, // verified
+        'PENDING'     => 4, // verified
+        'ESCALATED'   => 3, // verified
+        'COMPLETED'   => 1, // verified
     ];
 
     /**

@@ -10,9 +10,9 @@ use App\Models\User;
  * the team physically closest to the customer.
  *
  * Why this exists: customers don't have a guaranteed `region` value.
- * - Newer accounts (created from a `CustomerInvite`) get a 4-broad
- *   `users.region` set at invite time.
- * - Older accounts (and accounts that self-registered) often have
+ * - Accounts auto-provisioned from the monday.com Customer Details
+ *   board get a 4-broad `users.region` from the board group title.
+ * - Older accounts often have
  *   `region = NULL` and the only address data we have is a free-text
  *   `branch` ("NCR - NATIONAL CAPITAL REGION", "QC", "St. Luke's BGC",
  *   "Cebu IT Park") and/or a free-text `address` ("32nd St., BGC,

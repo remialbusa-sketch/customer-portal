@@ -10,10 +10,10 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#0A2540">
-        <title>BioTechnical Solutions — Customer Portal</title>
+        <title>MCBIO SERVICE PORTAL</title>
         <meta name="description" content="Sign in to the BioTechnical Solutions service portal. Open and track service tickets for the equipment we support.">
 
-        <link rel="icon" type="image/svg+xml" href="{{ asset('images/brand/favicon.svg') }}">
+        <link rel="icon" type="image/png" href="{{ asset('images/brand/favicon-mcbio.png') }}">
 
         <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
         <link rel="preload" href="https://fonts.bunny.net/css?family=inter:400,500,600,700|plus-jakarta-sans:600,700,800&display=swap" as="style" onload="this.rel='stylesheet'">
@@ -78,8 +78,9 @@
                     </div>
 
                     <p class="mt-6 text-sm text-brand-slate">
-                        Don't have an account yet?
-                        <span class="text-brand-navy">Ask your service coordinator to send you an invite link.</span>
+                        New here? When your service coordinator adds you on monday.com, you'll
+                        receive an email with your temporary sign-in password.
+                        <span class="text-brand-navy">Sign in, then set a password of your own.</span>
                     </p>
                 </div>
 

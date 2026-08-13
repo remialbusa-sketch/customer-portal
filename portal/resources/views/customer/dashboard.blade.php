@@ -195,7 +195,7 @@
                                         <div class="flex items-center gap-3">
                                             <div class="flex-1 min-w-0">
                                                 <div class="flex items-center gap-2 mb-1 flex-wrap">
-                                                    <span class="text-[11px] font-mono text-base-content/50" x-text="`#${t.id}`"></span>
+                                                    <span class="text-[11px] font-mono text-base-content/50" x-text="t.name || `#${t.id}`"></span>
                                                     <span :class="`badge ${statusBadge(t.status_text).class} badge-sm gap-1 font-medium`">
                                                         <span :class="`w-1.5 h-1.5 rounded-full ${statusBadge(t.status_text).dot}`"></span>
                                                         <span x-text="t.status_text || '—'"></span>

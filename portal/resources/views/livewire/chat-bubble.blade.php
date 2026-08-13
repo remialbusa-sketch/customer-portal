@@ -9,6 +9,10 @@ new class extends Component
     public string $currentUserRole;
     public array  $messages = [];
 
+    // Monday item name (e.g. "TICKET-00079") shown in the header.
+    // Falls back to the numeric ticket id when empty.
+    public ?string $ticketName = null;
+
     // Canonical "this ticket is in a terminal state" boolean.
     // When true, the input is disabled, the send button is
     // disabled, and a "Ticket is closed" notice replaces the
@@ -32,12 +36,14 @@ new class extends Component
         string $currentUserRole,
         array $messages = [],
         bool $isClosed = false,
+        ?string $ticketName = null,
     ): void {
         $this->ticketId        = $ticketId;
         $this->currentUserName = $currentUserName;
         $this->currentUserRole = $currentUserRole;
         $this->messages        = $messages;
         $this->isClosed        = $isClosed;
+        $this->ticketName      = $ticketName;
     }
 
     public function send(): void
@@ -183,7 +189,7 @@ new class extends Component
                 </div>
                 <div>
                     <div class="text-sm font-semibold leading-tight">Chat with our support team</div>
-                    <div class="text-[11px] text-primary-content/80">Ticket #{{ $ticketId }}</div>
+                    <div class="text-[11px] text-primary-content/80">{{ $ticketName ?: ('Ticket #' . $ticketId) }}</div>
                 </div>
             </div>
             <button

@@ -2,7 +2,7 @@
     <x-slot:header>
         <div class="flex flex-col gap-1">
             <span class="text-xs font-semibold uppercase tracking-wider text-base-content/60">Service Report</span>
-            <span class="text-2xl font-semibold text-base-content">Ticket #{{ $ticket['id'] ?? '—' }}</span>
+            <span class="text-2xl font-semibold text-base-content">{{ $ticket['name'] ?: ('Ticket #' . ($ticket['id'] ?? '—')) }}</span>
             @php $subject = $ticket['column_values']['text_mm5c1w5n']['text'] ?: ($ticket['name'] ?? null); @endphp
             @if (!empty($subject))
                 <span class="text-sm text-base-content/70">{{ $subject }}</span>

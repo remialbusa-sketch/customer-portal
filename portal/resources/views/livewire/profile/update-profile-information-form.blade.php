@@ -14,6 +14,22 @@ new class extends Component
     public string $account_name = '';
     public string $branch = '';
 
+    /**
+     * Sentinel value used in the branch <select> when the user's
+     * existing branch isn't in the canonical list (e.g. an old value
+     * like "St. Luke's BGC" or a brand-new site). Setting this reveals
+     * a freeform text input below the dropdown so the user can still
+     * correct it.
+     */
+    public string $branchCustom = '';
+
+    /**
+     * Convenience flag derived from $branch — true when the
+     * branch value isn't in the dropdown list (so the user is on the
+     * "Other" escape hatch and the freeform input should be visible).
+     */
+    public bool $branchIsCustom = false;
+
     // Equipment management
     public bool $showMachineForm = false;
     public ?int $editingMachineId = null;
@@ -47,11 +63,87 @@ new class extends Component
     }
 
     /**
+     * Canonical list of branch offices to show in the branch <select>.
+     * We use a fixed four-region taxonomy (NCR / North Luzon / Visayas
+     * / Mindanao) so the dropdown stays stable regardless of how many
+     * distinct junk strings have been written into users.branch over
+     * time. The user's own current branch (if any) is forced in so
+     * the current value is always selectable until they save a
+     * corrected region.
+     *
+     * @return array<int, string>
+     */
+    public function getBranchesOptionListProperty(): array
+    {
+        $canonical = [
+            'National Capital Region',
+            'North Luzon',
+            'Visayas',
+            'Mindanao',
+        ];
+
+        $user = Auth::user();
+        $current = trim((string) ($user->branch ?? ''));
+
+        if ($current !== '' && ! in_array($current, $canonical, true)) {
+            // Keep the user's legacy value selectable until they pick
+            // a canonical region on next save. Sort alphabetically.
+            $canonical[] = $current;
+            usort($canonical, fn ($a, $b) => strcasecmp($a, $b));
+        }
+
+        return $canonical;
+    }
+
+    /**
+     * True when the user's current branch already in the dropdown
+     * list (so we don't need to show the freeform "Other" input).
+     */
+    public function getBranchIsInListProperty(): bool
+    {
+        $current = trim($this->branch);
+        if ($current === '') {
+            return true;
+        }
+
+        return in_array($current, $this->branchesOptionList, true);
+    }
+
+    /**
+     * Hook into the live update so the page can react when the user
+     * picks "Other" from the dropdown. We keep the underlying
+     * $branch field authoritative and only set the flag for the
+     * template to read.
+     */
+    public function updatedBranch(): void
+    {
+        $this->branchIsCustom = $this->branch === '__custom__';
+    }
+
+    /**
+     * Called right before validation: normalize the branch value.
+     * If the user picked "Other" and typed in the freeform input,
+     * lift that text into $branch (trimmed). Otherwise leave $branch
+     * as-is.
+     */
+    public function updatedBranchCustom(): void
+    {
+        $this->branchCustom = trim($this->branchCustom);
+    }
+
+    /**
      * Update the profile information for the currently authenticated user.
      */
     public function updateProfileInformation(): void
     {
         $user = Auth::user();
+
+        // If the user picked "Other" from the dropdown, capture the
+        // freeform text into the real $branch field before validating.
+        $this->branch = trim($this->branch);
+        if ($this->branch === '__custom__') {
+            $this->branch = trim($this->branchCustom);
+        }
 
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -67,6 +159,11 @@ new class extends Component
         }
 
         $user->save();
+
+        // Reset the freeform fields so a stale "Other" text doesn't
+        // hang around after a successful save.
+        $this->branchCustom = '';
+        $this->branchIsCustom = false;
 
         $this->dispatch('profile-updated', name: $user->name);
     }
@@ -231,16 +328,53 @@ new class extends Component
                 @endif
             </div>
 
+            {{-- Hospital / account name is a customer-only field.
+                 TSP / manager / admin accounts don't need (and can't
+                 meaningfully edit) the hospital they were provisioned
+                 against — it's the customer's identity, not the TSP's.
+                 Branch / department is still surfaced for everyone:
+                 TSPs occasionally land in the wrong branch when seeded
+                 from monday.com and need to fix it themselves. --}}
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                @if (auth()->user()?->isCustomer())
                 <div>
                     <x-input-label for="account_name" :value="__('Hospital / account name')" />
                     <x-text-input wire:model="account_name" id="account_name" name="account_name" type="text" class="mt-1 block w-full" autocomplete="organization" />
                     <x-input-error class="mt-2" :messages="$errors->get('account_name')" />
                 </div>
+                @endif
                 <div>
-                    <x-input-label for="branch" :value="__('Branch / department')" />
-                    <x-text-input wire:model="branch" id="branch" name="branch" type="text" class="mt-1 block w-full" autocomplete="address-level2" />
+                    <x-input-label for="branch" :value="__('Branch')" />
+                    <select
+                        wire:model.live="branch"
+                        id="branch"
+                        name="branch"
+                        class="mt-1 block w-full rounded-lg border-brand-mist bg-white text-brand-navy shadow-sm transition focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 focus:ring-offset-0"
+                        autocomplete="address-level2"
+                    >
+                        <option value="">{{ __('— Select branch —') }}</option>
+                        @foreach ($this->branchesOptionList as $option)
+                            <option value="{{ $option }}" @selected($this->branch === $option)>{{ $option }}</option>
+                        @endforeach
+                        <option value="__custom__" @selected($this->branchIsCustom)>{{ __('Other (please specify)') }}</option>
+                    </select>
                     <x-input-error class="mt-2" :messages="$errors->get('branch')" />
+
+                    @if ($this->branchIsCustom)
+                        <div class="mt-2">
+                            <x-input-label for="branchCustom" :value="__('Custom branch / department')" class="sr-only" />
+                            <x-text-input
+                                wire:model="branchCustom"
+                                id="branchCustom"
+                                name="branchCustom"
+                                type="text"
+                                class="mt-1 block w-full"
+                                :placeholder="__('Type the branch or department name')"
+                                autocomplete="address-level2"
+                            />
+                            <x-input-error class="mt-2" :messages="$errors->get('branchCustom')" />
+                        </div>
+                    @endif
                 </div>
             </div>
 

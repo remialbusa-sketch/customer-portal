@@ -28,6 +28,12 @@ class AppServiceProvider extends ServiceProvider
         // auto-discover this from the typed `handle(TicketCreated $event)`
         // signature in App\Listeners, but spelling it out here makes
         // the wiring obvious to anyone reading the provider.
-        Event::listen(TicketCreated::class, SendTspAlertForNewTicket::class);
+        //
+        // TEMPORARILY DISABLED (2026-08-13): the email alert to TSPs on
+        // new tickets is off while we trial Monday.com automations for
+        // branch notifications. The realtime broadcast (region.* / all)
+        // and the ticket_acknowledgements feature remain active.
+        // Re-enable by uncommenting the line below.
+        // Event::listen(TicketCreated::class, SendTspAlertForNewTicket::class);
     }
 }

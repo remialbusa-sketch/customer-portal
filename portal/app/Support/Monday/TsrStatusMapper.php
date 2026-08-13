@@ -8,14 +8,13 @@ use App\Enums\ServiceStatus;
 
 /**
  * Maps a Technical Service Report (TSR) status to the label the
- * Tickets board (5028514175) expects on its `status95` column.
+ * Tickets board (5029331350) expects on its `status95` column.
  *
  * The two boards have different status vocabularies:
- *  - TSR (5029041107) has 5 values: open / in-progress / pending /
- *    escalated / completed
- *  - Tickets (5028514175) has the executive's standard pipeline:
- *    New / Assigned / Working on it / Waiting for parts / Escalated /
- *    Resolved / Closed
+ *  - TSR (5029041107) has 5 values: OPEN / IN-PROGRESS / PENDING /
+ *    ESCALATED / COMPLETED
+ *  - Tickets (5029331350) has the executive's standard pipeline:
+ *    OPEN / Working on it / PENDING / ESCALATED / Resolved / COMPLETED
  *
  * The mapping is NOT 1:1 because a TSR's "Completed" does not always
  * mean a ticket is "Resolved" (the TSP might complete the on-site
@@ -23,8 +22,8 @@ use App\Enums\ServiceStatus;
  *
  *   TSR OPEN        → keep current ticket status (no change)
  *   TSR IN-PROGRESS → "Working on it"
- *   TSR PENDING     → "Waiting for parts"
- *   TSR ESCALATED   → "Escalated"
+ *   TSR PENDING     → "PENDING"
+ *   TSR ESCALATED   → "ESCALATED"
  *   TSR COMPLETED   → "COMPLETED"
  *
  * The class returns the *label string* (e.g. "Working on it") so the
@@ -44,10 +43,10 @@ final class TsrStatusMapper
     public static function toTicketStatusLabel(ServiceStatus $tsr): string
     {
         return match ($tsr) {
-            ServiceStatus::Open        => 'Open',           // no-op, see toTicketChange()
+            ServiceStatus::Open        => 'OPEN',           // no-op, see toTicketChange()
             ServiceStatus::InProgress  => 'Working on it',
-            ServiceStatus::Pending     => 'Waiting for parts',
-            ServiceStatus::Escalated   => 'Escalated',
+            ServiceStatus::Pending     => 'PENDING',
+            ServiceStatus::Escalated   => 'ESCALATED',
             ServiceStatus::Completed   => 'COMPLETED',
         };
     }
@@ -114,18 +113,22 @@ final class TsrStatusMapper
      * brings a new ticket status, recompute what the latest local TSR
      * status should be set to so the local audit trail stays in sync.
      *
+     * Accepts the live board's label vocabulary, including its verbatim
+     * "IN-RPOGRESS" typo (see MondayColumnIds::TICKETS_STATUS_LABEL_INDEX).
+     *
      * Returns null when the ticket status has no TSR equivalent
-     * (e.g. "Closed" is post-TSR; "New" is pre-TSR).
+     * (e.g. "Resolved" is post-TSR; "OPEN" is pre-TSR).
      */
     public static function fromTicketStatusLabel(string $ticketLabel): ?ServiceStatus
     {
         return match ($ticketLabel) {
-            'Open', 'New'                       => ServiceStatus::Open,
-            'Working on it', 'Assigned'         => ServiceStatus::InProgress,
-            'Waiting for parts'                 => ServiceStatus::Pending,
-            'Escalated'                         => ServiceStatus::Escalated,
-            'Resolved', 'Done'                  => ServiceStatus::Completed,
-            default                             => null,
+            'OPEN'                                  => ServiceStatus::Open,
+            'Working on it', 'IN-RPOGRESS',
+            'IN-PROGRESS', 'Assigned'               => ServiceStatus::InProgress,
+            'PENDING', 'Waiting for parts'          => ServiceStatus::Pending,
+            'ESCALATED', 'Escalated'                => ServiceStatus::Escalated,
+            'COMPLETED', 'Resolved', 'Done'         => ServiceStatus::Completed,
+            default                                 => null,
         };
     }
 }

@@ -6,7 +6,7 @@
                     Service request
                 </p>
                 <h2 class="font-semibold text-2xl text-base-content leading-tight truncate">
-                    Ticket #{{ $ticket['id'] }} &mdash; {{ $ticket['column_values']['text_mm5c1w5n']['text'] ?: $ticket['name'] }}
+                    {{ $ticket['name'] ?: ('Ticket #' . $ticket['id']) }}@if(!empty($ticket['column_values']['text_mm5c1w5n']['text'])) &mdash; {{ $ticket['column_values']['text_mm5c1w5n']['text'] }}@endif
                 </h2>
             </div>
             <a href="{{ route('tsp.dashboard') }}" class="btn btn-ghost btn-sm gap-1 self-start sm:self-auto">
@@ -320,6 +320,7 @@
                 <div class="lg:col-span-2">
                     <livewire:chat-panel
                         :ticket-id="$ticket['id']"
+                        :ticket-name="$ticket['name'] ?? null"
                         :current-user-name="$user->name"
                         :current-user-role="$user->role"
                         :messages="$messages"

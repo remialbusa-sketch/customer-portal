@@ -132,14 +132,6 @@ Route::middleware(['auth', 'role:fse,its,manager,admin'])->prefix('tsp')->name('
 // the invites section with one role grant.
 Route::middleware(['auth', 'role:superadmin,admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/kpi', [KpiController::class, 'index'])->name('kpi');
-
-    // Invites UI — both admins and superadmins can use it. The nav
-    // link is shown only to superadmins so admins aren't surprised
-    // by an extra menu item.
-    Route::get('/invites', [\App\Http\Controllers\Admin\InviteController::class, 'index'])
-        ->name('invites');
-    Route::post('/invites', [\App\Http\Controllers\Admin\InviteController::class, 'store'])
-        ->name('invites.store');
 });
 
 // Account-deletion request inbox. Superadmin-only — non-superadmin

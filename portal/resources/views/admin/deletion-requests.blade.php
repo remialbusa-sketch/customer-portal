@@ -9,9 +9,9 @@
                     Account deletion requests
                 </h2>
             </div>
-            <a href="{{ route('admin.invites') }}" class="btn btn-ghost btn-sm gap-1 self-start sm:self-auto">
+            <a href="{{ route('admin.kpi') }}" wire:navigate class="btn btn-ghost btn-sm gap-1 self-start sm:self-auto">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                Customer invites
+                KPI dashboard
             </a>
         </div>
     </x-slot>

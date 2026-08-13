@@ -28,16 +28,18 @@
                     </p>
                     <div class="mt-4">
                         @php
-                            // Fall back to the user's role-aware home instead of a
-                            // hardcoded `route('dashboard')` (customer-only) which
-                            // 403s for FSE/ITS/Manager/Admin who hit this page.
-                            $backUrl = url()->previous() ?: (auth()->user()?->homeRoute()
+                            // Always escape to the user's role-aware home
+                            // page. url()->previous() is NOT safe here:
+                            // after a 403 completes, the session's previous
+                            // URL is the forbidden page itself, so "go
+                            // back" would loop forever on the same 403.
+                            $homeUrl = auth()->user()
                                 ? route(auth()->user()->homeRoute())
-                                : '/');
+                                : url('/');
                         @endphp
-                        <a href="{{ $backUrl }}" class="btn btn-primary btn-sm gap-1">
+                        <a href="{{ $homeUrl }}" class="btn btn-primary btn-sm gap-1">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                            Go back
+                            Go to dashboard
                         </a>
                     </div>
                 </div>

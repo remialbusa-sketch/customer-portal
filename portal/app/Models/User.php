@@ -9,10 +9,11 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Hash;
 
 #[Fillable([
     'name', 'email', 'password',
-    'role', 'status', 'monday_id',
+    'role', 'status', 'must_change_password', 'monday_id',
     'team', 'region', 'skills',
     'branch', 'address', 'account_name', 'brand', 'model',
     'serial_number', 'installation_date',
@@ -22,6 +23,20 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    /**
+     * Default password for accounts auto-provisioned from the
+     * monday.com Customer Details board (or the TSP roster).
+     * Anyone still using it sees the "temporary password" notice
+     * until they set a password of their own.
+     */
+    public const DEFAULT_PASSWORD = 'Password!123';
+
+    /**
+     * Memoized result of {@see usingDefaultPassword()}: one bcrypt
+     * check per request at most.
+     */
+    private ?bool $usesDefaultPassword = null;
 
     /**
      * Get the attributes that should be cast.
@@ -35,6 +50,7 @@ class User extends Authenticatable
             'password'          => 'hashed',
             'skills'            => 'array',
             'installation_date' => 'date',
+            'must_change_password' => 'boolean',
         ];
     }
 
@@ -83,12 +99,39 @@ class User extends Authenticatable
     }
 
     /**
+     * True when the account was auto-provisioned with the default
+     * password and still hasn't been changed.
+     */
+    public function mustChangePassword(): bool
+    {
+        return (bool) $this->must_change_password;
+    }
+
+    /**
+     * True when the account's password is STILL the default
+     * (Password!123) — whether it was auto-provisioned from the
+     * monday.com board or seeded by an admin. Drives the
+     * "temporary password" notice in the navigation, which shows
+     * for every user who hasn't set a password of their own.
+     *
+     * Memoized per model instance so the bcrypt check runs at most
+     * once per request.
+     */
+    public function usingDefaultPassword(): bool
+    {
+        return $this->usesDefaultPassword ??= Hash::check(
+            self::DEFAULT_PASSWORD,
+            (string) $this->getAuthPassword()
+        );
+    }
+
+    /**
      * The route name we should send this user to after login.
      */
     public function homeRoute(): string
     {
         return match ($this->role) {
-            'superadmin'                         => 'admin.invites',
+            'superadmin'                         => 'admin.kpi',
             'admin'                              => 'admin.kpi',
             'fse', 'its', 'manager'              => 'tsp.dashboard',
             default                              => 'dashboard',

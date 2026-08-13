@@ -77,9 +77,8 @@ class AccountDeletionRequestController extends Controller
             // Delete the user if they still exist. We do this
             // inside the same transaction so a failed delete
             // rolls back the status flip. Foreign keys on
-            // chat_messages etc. are typically set to null
-            // (matches CustomerInvite) — adjust here if a
-            // schema uses restrict.
+            // chat_messages etc. are typically set to null —
+            // adjust here if a schema uses restrict.
             if ($deletionRequest->user_id) {
                 User::where('id', $deletionRequest->user_id)->delete();
             }

@@ -1,4 +1,5 @@
-<div wire:poll.20s="pollRefresh" wire:poll.keep-alive>
+<div wire:poll.20s="pollRefresh" wire:poll.keep-alive
+     x-on:close-transfer-modal.window="document.body.classList.remove('overflow-y-hidden')">
     {{-- pollRefresh runs every 20s (paused while a claim is in
          flight — see Dashboard::pollRefresh). keep-alive keeps
          the timer running when the tab is backgrounded so a
@@ -272,7 +273,67 @@
                 </div>
             @endif
 
-            {{-- ───── Filter bar ─────
+            {{-- ───── Incoming transfer requests ─────
+                 Another TSP wants to hand one of their tickets to
+                 you. Nothing moves until you ACCEPT — accepting
+                 rewrites the People column on Monday (original TSP
+                 removed, you added). Declining keeps the ticket with
+                 the original TSP. --}}
+            @if(!empty($incomingTransfers))
+                <x-ui.card
+                    title="Incoming transfer requests"
+                    subtitle="Confirm to take over the assignment"
+                    padding="p-0"
+                    tone="accent"
+                >
+                    <x-slot:icon>
+                        <span aria-hidden="true" class="w-7 h-7 rounded-lg bg-accent/10 text-accent flex items-center justify-center shrink-0">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                        </span>
+                    </x-slot:icon>
+
+                    <ul role="list" class="divide-y divide-base-300/70">
+                        @foreach($incomingTransfers as $tr)
+                            <li wire:key="transfer-{{ $tr['id'] }}" class="px-4 py-3.5">
+                                <div class="flex items-center gap-3">
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center gap-2 mb-1 flex-wrap">
+                                            <span class="text-[11px] font-mono text-base-content/50">#{{ $tr['monday_ticket_id'] }}</span>
+                                            <span class="badge badge-accent badge-sm gap-1 font-medium">
+                                                <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                                                Awaiting your confirmation
+                                            </span>
+                                        </div>
+                                        <p class="text-sm font-semibold text-base-content truncate">{{ $tr['ticket_label'] }}</p>
+                                        <p class="text-[11px] text-base-content/60 mt-0.5">
+                                            {{ $tr['from_name'] }}<span class="text-base-content/40">@if(!empty($tr['from_region'])) · {{ $tr['from_region'] }} @endif</span>
+                                            <span class="text-base-content/40">· {{ $tr['created_at'] }}</span>
+                                        </p>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 shrink-0">
+                                        <button type="button"
+                                                wire:click="acceptTransfer({{ $tr['id'] }})"
+                                                wire:loading.attr="disabled"
+                                                wire:target="acceptTransfer({{ $tr['id'] }})"
+                                                wire:confirm="Accept transfer of ticket #{{ $tr['monday_ticket_id'] }}? It will be reassigned to you on Monday.com — the current TSP will no longer hold it."
+                                                class="btn btn-sm btn-primary gap-1">
+                                            <span wire:loading.remove wire:target="acceptTransfer({{ $tr['id'] }})">Accept</span>
+                                            <span wire:loading wire:target="acceptTransfer({{ $tr['id'] }})" class="loading loading-spinner loading-xs"></span>
+                                        </button>
+                                        <button type="button"
+                                                wire:click="declineTransfer({{ $tr['id'] }})"
+                                                wire:confirm="Decline this transfer request? The ticket stays with the current TSP."
+                                                class="btn btn-sm btn-ghost text-base-content/70 hover:bg-base-200">
+                                            Decline
+                                        </button>
+                                    </div>
+                                </div>
+                            </li>
+                        @endforeach
+                    </ul>
+                </x-ui.card>
+            @endif
+            {{-- Filters toolbar (search / status / sort).
                  Applies to both Available and My tickets via the
                  filteredAvailable / filteredMyTickets computed
                  properties. Every wire:model.live triggers a
@@ -400,7 +461,7 @@
                                 body="Try adjusting your search or filters."
                             />
                         </div>
-                    @else
+                @else
                     <ul role="list" class="divide-y divide-base-300/70">
                         @foreach($this->filteredAvailable as $t)
                             @php
@@ -421,7 +482,7 @@
                                 <div class="flex items-center gap-3 px-4 py-3.5 hover:bg-base-200/60 transition group">
                                     <div class="flex-1 min-w-0">
                                         <div class="flex items-center gap-2 mb-1">
-                                            <span class="text-[11px] font-mono text-base-content/50">#{{ $t['id'] }}</span>
+                                            <span class="text-[11px] font-mono text-base-content/50">{{ $t['name'] ?: ('#' . $t['id']) }}</span>
                                             <span class="badge {{ $statusConfig['class'] }} badge-sm gap-1 font-medium">
                                                 <span class="w-1.5 h-1.5 rounded-full {{ $statusConfig['dot'] }}"></span>
                                                 {{ $t['status_text'] ?? '—' }}
@@ -490,11 +551,12 @@
                 <div class="fixed inset-0 z-50 overflow-y-auto"
                      x-data
                      x-init="document.body.classList.add('overflow-y-hidden')"
-                     x-on:keydown.escape.window="$wire.cancelClaim()"
+                     x-on:keydown.escape.window="$wire.cancelClaim(); document.body.classList.remove('overflow-y-hidden')"
                      x-on:close-claim-modal.window="document.body.classList.remove('overflow-y-hidden')">
                     {{-- Backdrop --}}
                     <div class="fixed inset-0 bg-gray-500/75 transition-opacity"
-                         wire:click="cancelClaim"></div>
+                         wire:click="cancelClaim"
+                         x-on:click="document.body.classList.remove('overflow-y-hidden')"></div>
 
                     {{-- Panel --}}
                     <div class="min-h-full flex items-center justify-center p-4">
@@ -507,6 +569,7 @@
                                 </div>
                                 <button type="button"
                                         wire:click="cancelClaim"
+                                        x-on:click="document.body.classList.remove('overflow-y-hidden')"
                                         class="text-gray-400 hover:text-gray-600 transition">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                                 </button>
@@ -517,7 +580,7 @@
                                 {{-- Ticket ID badge --}}
                                 <div class="flex items-center gap-2">
                                     <span class="text-xs font-mono font-semibold text-gray-400 uppercase">Ticket</span>
-                                    <span class="text-sm font-mono font-bold text-gray-900">#{{ $claimingTicket['id'] }}</span>
+                                    <span class="text-sm font-mono font-bold text-gray-900">{{ $claimingTicket['name'] ?: ('#' . $claimingTicket['id']) }}</span>
                                 </div>
 
                                 {{-- Account name --}}
@@ -561,9 +624,11 @@
                             <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
                                 <button type="button"
                                         wire:click="cancelClaim"
+                                        x-on:click="document.body.classList.remove('overflow-y-hidden')"
                                         class="btn btn-sm btn-ghost">Cancel</button>
                                 <button type="button"
                                         wire:click="confirmClaim"
+                                        x-on:click="document.body.classList.remove('overflow-y-hidden')"
                                         wire:loading.attr="disabled"
                                         class="btn btn-sm btn-primary gap-1.5">
                                     <span wire:loading.remove wire:target="confirmClaim">
@@ -614,6 +679,16 @@
                         />
                     </div>
                 @else
+                    @php
+                        // Map monday_ticket_id → pending outgoing transfer
+                        // so rows can show a "Transfer pending" hint + Cancel.
+                        // Built here (not in the Available card) so the
+                        // hints work even when the available pool is empty.
+                        $pendingTransferByTicket = [];
+                        foreach ($myPendingTransfers as $pt) {
+                            $pendingTransferByTicket[$pt['monday_ticket_id']] = $pt;
+                        }
+                    @endphp
                     <ul role="list" class="divide-y divide-base-300/70">
                         @foreach($this->filteredMyTickets as $t)
                             @php
@@ -655,53 +730,93 @@
                                     ),
                                 ));
                             @endphp
-                            <li wire:key="mine-{{ $t['id'] }}">
-                                <a href="{{ route('tsp.tickets.show', $t['id']) }}"
-                                   class="block px-4 py-3.5 hover:bg-base-200/60 transition group">
-                                    <div class="flex items-center gap-3">
-                                        <div class="flex-1 min-w-0">
-                                            <div class="flex items-center gap-2 mb-1 flex-wrap">
-                                                <span class="text-[11px] font-mono text-base-content/50">#{{ $t['id'] }}</span>
-                                                <span class="badge {{ $statusConfig['class'] }} badge-sm gap-1 font-medium">
-                                                    <span class="w-1.5 h-1.5 rounded-full {{ $statusConfig['dot'] }}"></span>
-                                                    {{ $t['status_text'] ?? '—' }}
+                            <li wire:key="mine-{{ $t['id'] }}" class="px-4 py-3.5 hover:bg-base-200/60 transition group">
+                                <div class="flex items-center gap-3">
+                                    <a href="{{ route('tsp.tickets.show', $t['id']) }}"
+                                       class="flex-1 min-w-0 block">
+                                        <div class="flex items-center gap-2 mb-1 flex-wrap">
+                                            <span class="text-[11px] font-mono text-base-content/50">{{ $t['name'] ?: ('#' . $t['id']) }}</span>
+                                            <span class="badge {{ $statusConfig['class'] }} badge-sm gap-1 font-medium">
+                                                <span class="w-1.5 h-1.5 rounded-full {{ $statusConfig['dot'] }}"></span>
+                                                {{ $t['status_text'] ?? '—' }}
+                                            </span>
+                                            @if($showAssignedBadge)
+                                                <span class="badge badge-outline badge-sm gap-1 text-[10px]" title="Also assigned to {{ implode(', ', $assignedNames) }}">
+                                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                                                    {{ implode(', ', $assignedNames) }}
                                                 </span>
-                                                @if($showAssignedBadge)
-                                                    <span class="badge badge-outline badge-sm gap-1 text-[10px]" title="Also assigned to {{ implode(', ', $assignedNames) }}">
-                                                        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                                                        {{ implode(', ', $assignedNames) }}
-                                                    </span>
-                                                @endif
-                                            </div>
-                                            <h3 class="text-sm font-semibold text-base-content truncate group-hover:text-primary transition">
-                                                {{ $t['subject_text'] ?: $t['name'] }}
-                                            </h3>
-                                            <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-base-content/60 mt-1">
-                                                @if($accountName)
-                                                    <span class="inline-flex items-center gap-1">
-                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-                                                        {{ $accountName }}
-                                                    </span>
-                                                @endif
-                                                @if($brand || $model)
-                                                    <span class="inline-flex items-center gap-1">
-                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
-                                                        {{ trim(($brand ?? '') . ' ' . (($brand && $model) ? '· ' : '') . ($model ?? '')) }}
-                                                    </span>
-                                                @endif
-                                                @if(!empty($t['updates_count']))
-                                                    <span class="inline-flex items-center gap-1">
-                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-                                                        {{ $t['updates_count'] }} update{{ $t['updates_count'] === 1 ? '' : 's' }}
-                                                    </span>
-                                                @endif
-                                            </div>
+                                            @endif
                                         </div>
-                                        <svg class="w-4 h-4 text-base-content/40 group-hover:text-primary group-hover:translate-x-0.5 transition flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                        </svg>
+                                        <h3 class="text-sm font-semibold text-base-content truncate group-hover:text-primary transition">
+                                            {{ $t['subject_text'] ?: $t['name'] }}
+                                        </h3>
+                                        <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-base-content/60 mt-1">
+                                            @if($accountName)
+                                                <span class="inline-flex items-center gap-1">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                                                    {{ $accountName }}
+                                                </span>
+                                            @endif
+                                            @if($brand || $model)
+                                                <span class="inline-flex items-center gap-1">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+                                                    {{ trim(($brand ?? '') . ' ' . (($brand && $model) ? '· ' : '') . ($model ?? '')) }}
+                                                </span>
+                                            @endif
+                                            @if(!empty($t['updates_count']))
+                                                <span class="inline-flex items-center gap-1">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                                                    {{ $t['updates_count'] }} update{{ $t['updates_count'] === 1 ? '' : 's' }}
+                                                </span>
+                                            @endif
+                                            @if(isset($pendingTransferByTicket[$t['id']]))
+                                                <span class="inline-flex items-center gap-1 text-accent">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                                                    Transfer pending → {{ $pendingTransferByTicket[$t['id']]['to_name'] }}
+                                                </span>
+                                            @endif
+                                        </div>
+                                    </a>
+
+                                    {{-- Row actions live OUTSIDE the ticket link so the
+                                         buttons never trigger the anchor's navigation. --}}
+                                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                                        @if(isset($pendingTransferByTicket[$t['id']]))
+                                            <button type="button"
+                                                    wire:click="cancelPendingTransfer({{ $pendingTransferByTicket[$t['id']]['id'] }})"
+                                                    wire:confirm="Cancel the transfer request for ticket #{{ $t['id'] }}? It stays assigned to you."
+                                                    class="btn btn-xs btn-ghost text-accent hover:bg-base-200">
+                                                Cancel request
+                                            </button>
+                                        @elseif(
+                                            !str_contains($statusLower, 'resolved')
+                                            && !str_contains($statusLower, 'closed')
+                                            && !str_contains($statusLower, 'done')
+                                            && !str_contains($statusLower, 'complete')
+                                            && empty($otherTsps)
+                                        )
+                                            {{-- Only the sole assignee can hand the ticket off —
+                                                 with co-assignees the People column rewrite would
+                                                 drop them. --}}
+                                            <button type="button"
+                                                    wire:click="openTransfer('{{ $t['id'] }}')"
+                                                    wire:loading.attr="disabled"
+                                                    wire:target="openTransfer('{{ $t['id'] }}')"
+                                                    class="btn btn-xs btn-ghost text-base-content/60 hover:text-primary hover:bg-base-200 gap-1"
+                                                    title="Transfer this ticket to another TSP">
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                                                <span>Transfer</span>
+                                            </button>
+                                        @endif
+                                        <a href="{{ route('tsp.tickets.show', $t['id']) }}"
+                                           class="text-base-content/40 hover:text-primary transition flex-shrink-0 p-1"
+                                           title="Open ticket #{{ $t['id'] }}">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                            </svg>
+                                        </a>
                                     </div>
-                                </a>
+                                </div>
                             </li>
                         @endforeach
                     </ul>
@@ -709,6 +824,139 @@
             </x-ui.card>
         </div>
     </div>
+
+    {{-- ───── Transfer-target picker modal ─────
+         Shown when the TSP clicks "Transfer" on one of their tickets.
+         The target TSP must ACCEPT the request on their own dashboard
+         before the assignment actually moves on Monday.com.
+
+         IMPORTANT: this block must stay INSIDE the component's root
+         element. A top-level sibling is dropped by Livewire's DOM
+         morph (it only morphs the first root child), so the modal
+         would never appear even though the server state updates. --}}
+    @if($transferTicketId)
+        <div class="fixed inset-0 z-50 overflow-y-auto"
+             x-data
+             x-init="document.body.classList.add('overflow-y-hidden')"
+             x-on:keydown.escape.window="$wire.cancelTransfer(); document.body.classList.remove('overflow-y-hidden')"
+             x-on:close-transfer-modal.window="document.body.classList.remove('overflow-y-hidden')">
+            {{-- Backdrop --}}
+            <div class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+                 wire:click="cancelTransfer"
+                 x-on:click="document.body.classList.remove('overflow-y-hidden')"></div>
+
+            {{-- Panel --}}
+            <div class="min-h-full flex items-center justify-center p-4">
+                <div class="relative bg-base-100 rounded-2xl shadow-xl max-w-lg w-full border border-base-300/70">
+                    {{-- Header --}}
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-base-300/70">
+                        <div>
+                            <h2 class="text-lg font-semibold text-base-content">Transfer {{ $transferTicketName ?: ('ticket #' . $transferTicketId) }}</h2>
+                            <p class="text-sm text-base-content/60 mt-0.5">
+                                Pick a TSP to take over. They'll need to confirm on their dashboard before it moves on Monday.
+                            </p>
+                        </div>
+                        <button type="button"
+                                wire:click="cancelTransfer"
+                                x-on:click="document.body.classList.remove('overflow-y-hidden')"
+                                class="text-base-content/40 hover:text-base-content transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+
+                    {{-- Body: target picker --}}
+                    <div class="px-6 py-5 space-y-4">
+                        {{-- Branch scope toggle: same branch by default;
+                             "all branches" for cross-branch handoffs when
+                             the local branch has no available TSP. --}}
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-xs font-semibold text-base-content/60 uppercase tracking-wider">Branch scope</span>
+                            <div class="join">
+                                <button type="button"
+                                        wire:click="setTransferScope('same')"
+                                        class="join-item btn btn-sm {{ $transferScope === 'same' ? 'btn-primary' : 'btn-ghost' }}">
+                                    Same branch
+                                </button>
+                                <button type="button"
+                                        wire:click="setTransferScope('all')"
+                                        class="join-item btn btn-sm {{ $transferScope === 'all' ? 'btn-primary' : 'btn-ghost' }}">
+                                    All branches
+                                </button>
+                            </div>
+                            @if($transferScope === 'all')
+                                <span class="badge badge-warning badge-sm gap-1">
+                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                                    Cross-branch
+                                </span>
+                            @endif
+                        </div>
+
+                        @if(empty($transferTargets))
+                            <div class="text-sm text-base-content/70 flex items-start gap-3 p-4 rounded-xl bg-base-200/50 border border-base-300/60">
+                                <svg class="w-5 h-5 text-base-content/40 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                @if($transferScope === 'same')
+                                    <span>No other TSP in your branch is available to receive this ticket right now — switch to <strong>All branches</strong> to find a receiver in another region.</span>
+                                @else
+                                    <span>No TSP across any branch is currently available to receive this ticket.</span>
+                                @endif
+                            </div>
+                        @else
+                            <fieldset>
+                                <legend class="block text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-2">
+                                    Choose the receiving TSP <span class="normal-case font-normal">({{ collect($transferTargets)->where('assignable', true)->count() }} available)</span>
+                                </legend>
+                                <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
+                                    @foreach($transferTargets as $target)
+                                        <label class="flex items-start gap-3 p-3 rounded-xl border {{ $target['assignable'] ? 'border-base-300/60 bg-base-200/30 hover:border-primary/50 hover:bg-primary/10 cursor-pointer transition' : 'border-base-300/30 bg-base-200/10 opacity-60 cursor-not-allowed' }}"
+                                               wire:key="target-{{ $target['id'] }}"
+                                               @if(!$target['assignable']) title="This TSP has no Monday.com person id linked yet — an admin must link it before they can receive transfers." @endif>
+                                            <input type="radio"
+                                                   name="transferTarget"
+                                                   value="{{ $target['id'] }}"
+                                                   wire:model.live="transferToUserId"
+                                                   class="radio radio-primary radio-sm mt-0.5"
+                                                   @if(!$target['assignable']) disabled @endif>
+                                            <span class="flex-1 min-w-0">
+                                                <span class="block text-sm font-semibold text-base-content">{{ $target['name'] }}</span>
+                                                <span class="block text-xs text-base-content/50 truncate">{{ $target['email'] }}</span>
+                                                @if(!$target['assignable'])
+                                                    <span class="block text-[10px] text-warning mt-0.5">No Monday account linked</span>
+                                                @endif
+                                            </span>
+                                            @if(!empty($target['region']))
+                                                <span class="badge badge-ghost badge-sm shrink-0">{{ $target['region'] }}</span>
+                                            @endif
+                                        </label>
+                                    @endforeach
+                                </div>
+                            </fieldset>
+                            <p class="text-[11px] text-base-content/50">
+                                The original assignment on Monday.com is only replaced after the receiving TSP confirms.
+                            </p>
+                        @endif
+                    </div>
+
+                    {{-- Footer --}}
+                    <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-base-300/70 bg-base-200/40 rounded-b-2xl">
+                        <button type="button"
+                                wire:click="cancelTransfer"
+                                x-on:click="document.body.classList.remove('overflow-y-hidden')"
+                                class="btn btn-sm btn-ghost">Cancel</button>
+                        <button type="button"
+                                wire:click="requestTransfer"
+                                wire:loading.attr="disabled"
+                                wire:target="requestTransfer"
+                                @disabled(empty($transferToUserId))
+                                class="btn btn-sm btn-primary gap-1"
+                                title="{{ empty($transferToUserId) ? 'Select a TSP first' : 'Send the transfer request' }}">
+                            <span wire:loading.remove wire:target="requestTransfer">Send request</span>
+                            <span wire:loading wire:target="requestTransfer" class="loading loading-spinner loading-xs"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>
 
 {{-- ───── Realtime Pusher subscription ─────

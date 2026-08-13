@@ -9,6 +9,10 @@ new class extends Component
     public string $currentUserName;
     public string $currentUserRole;
 
+    // Monday item name (e.g. "TICKET-00079") shown in the header.
+    // Falls back to the numeric ticket id when empty.
+    public ?string $ticketName = null;
+
     /**
      * Initial chat history passed in by the parent view as a
      * plain array of associative arrays (see
@@ -39,12 +43,14 @@ new class extends Component
         string $currentUserRole,
         array $messages = [],
         bool $isClosed = false,
+        ?string $ticketName = null,
     ): void {
         $this->ticketId        = $ticketId;
         $this->currentUserName = $currentUserName;
         $this->currentUserRole = $currentUserRole;
         $this->messages        = $messages;
         $this->isClosed        = $isClosed;
+        $this->ticketName      = $ticketName;
     }
 
     public function send(): void
@@ -117,6 +123,7 @@ new class extends Component
     <div class="px-6 py-4 border-b border-base-300/70 flex items-center justify-between">
         <h3 class="text-base font-semibold text-base-content">
             Chat with {{ $currentUserRole === 'customer' ? 'our support team' : 'the customer' }}
+            <span class="ml-2 text-xs font-mono text-base-content/40">{{ $ticketName ?: ('Ticket #' . $ticketId) }}</span>
         </h3>
         <div class="text-xs text-base-content/50 flex items-center gap-1.5">
             <span x-show="connecting" x-cloak>Connecting…</span>
