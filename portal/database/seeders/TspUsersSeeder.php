@@ -59,6 +59,7 @@ class TspUsersSeeder extends Seeder
         ['77717999',  'Hannah Pepito',                'hannah.pepito@mcbtsi.com',         'its',     'ITS',     'NCR'],
         ['89907887',  'Francis Conrad Sevilla',       'francis.sevilla@mcbtsi.com',       'its',     'ITS',     'NCR'],
         ['93755673',  'Roger S. Opialda',             'roger.opialda@mcbtsi.com',         'its',     'ITS',     'CDO'],
+        ['77561926',  'Remial Busa',                  'remial.busa@mcbtsi.com',           'its',     'ITS',     'NCR'],
 
         // ── Service Managers (new 'manager' role) ───────────────────────
         ['77717213',  'Randee A. Borinaga',           'randee.borinaga@mcbtsi.com',       'manager', 'MGR',     'NCR'],
