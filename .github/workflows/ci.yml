@@ -146,7 +146,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           port: 21
-          local-dir: portal
+          local-dir: portal/
           server-dir: /
           timeout: 180000
           exclude: |
