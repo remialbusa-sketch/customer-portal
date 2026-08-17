@@ -104,6 +104,15 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
 
+    env:
+      SSH_OPTS: >-
+        -i $HOME/.ssh/id_rsa
+        -o StrictHostKeyChecking=no
+        -o UserKnownHostsFile=/dev/null
+        -o KexAlgorithms=+diffie-hellman-group-exchange-sha256
+        -o HostKeyAlgorithms=+ssh-rsa
+        -o PubkeyAcceptedAlgorithms=+ssh-rsa
+
     steps:
       - uses: actions/checkout@v4
 
@@ -137,59 +146,30 @@ jobs:
         working-directory: portal
         run: npm run build
 
-      - name: Build production caches
+      # ── Deploy via native SSH/rsync (legacy-KEX compatible) ─
+      - name: Write SSH key
+        run: |
+          mkdir -p "$HOME/.ssh"
+          echo "${{ secrets.CPANEL_SSH_KEY }}" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+
+      - name: Sync files to cPanel
         working-directory: portal
         run: |
-          cp .env.example .env
-          php artisan key:generate --force
-          php artisan config:cache
-          php artisan route:cache
-
-      # ── Upload artifact ──────────────────────────────────
-      - name: Create deployment artifact
-        working-directory: portal
-        run: |
-          # Remove dev-only files
-          rm -rf node_modules tests scripts .github
-          rm -f phpunit.xml .env .env.example
-          rm -rf storage/framework/cache/data storage/framework/sessions storage/framework/views
-          rm -rf bootstrap/cache/*.php
-
-          # Create tarball
-          cd ..
-          tar -czf customer-portal.tar.gz portal/
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: customer-portal-${{ github.sha }}
-          path: customer-portal.tar.gz
-          retention-days: 7
-
-      # ── Deploy via SSH ───────────────────────────────────
-      - name: Deploy to cPanel
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.CPANEL_HOST }}
-          username: ${{ secrets.CPANEL_USER }}
-          key: ${{ secrets.CPANEL_SSH_KEY }}
-          port: ${{ secrets.CPANEL_SSH_PORT || 22 }}
-          source: "portal/*"
-          target: ${{ secrets.CPANEL_DEPLOY_PATH }}
-          strip_components: 0
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude '.env*' \
+            --exclude 'storage' \
+            --exclude 'bootstrap/cache/*' \
+            -e "ssh $SSH_OPTS" \
+            ./ "${{ secrets.CPANEL_USER }}@${{ secrets.CPANEL_HOST }}:${{ secrets.CPANEL_DEPLOY_PATH }}/portal/"
 
       - name: Post-deploy setup
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.CPANEL_HOST }}
-          username: ${{ secrets.CPANEL_USER }}
-          key: ${{ secrets.CPANEL_SSH_KEY }}
-          port: ${{ secrets.CPANEL_SSH_PORT || 22 }}
-          script: |
-            cd ${{ secrets.CPANEL_DEPLOY_PATH }}/portal
-            php artisan migrate --force
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
-            php artisan icons:cache 2>/dev/null || true
-            chmod -R 775 storage bootstrap/cache
+        run: |
+          ssh $SSH_OPTS "${{ secrets.CPANEL_USER }}@${{ secrets.CPANEL_HOST }}" \
+            'cd ${{ secrets.CPANEL_DEPLOY_PATH }}/portal && \
+             php artisan migrate --force && \
+             php artisan config:cache && \
+             php artisan route:cache && \
+             php artisan view:cache && \
+             chmod -R 775 storage bootstrap/cache'
