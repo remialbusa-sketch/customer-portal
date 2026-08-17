@@ -77,14 +77,18 @@ jobs:
 
       - name: Channel auth checks
         working-directory: portal
-        run: php verify_fixes.php || true
-        # Runs all checks — failures are aspirational, not blocking.
+        run: echo "skipped — verify_fixes.php was a one-off debug script, not tracked in git"
 
       # ── Lint ─────────────────────────────────────────────
       - name: PHP syntax check
         working-directory: portal
         run: |
-          find app -name '*.php' -exec php -l {} \; 2>&1 | grep -v "No syntax errors"
+          errors=$(find app -name '*.php' -exec php -l {} \; 2>&1 | grep -v "No syntax errors" || true)
+          if [ -n "$errors" ]; then
+            echo "$errors"
+            exit 1
+          fi
+          echo "All PHP files pass syntax check"
 
       # ── Cache verification ───────────────────────────────
       - name: Verify production caches build
