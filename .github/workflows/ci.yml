@@ -54,9 +54,21 @@ jobs:
         run: npm run build
 
       # ── PHPUnit ──────────────────────────────────────────
+      - name: Prepare test database (for AllRolesE2ETest)
+        working-directory: portal
+        run: |
+          touch database/database.sqlite
+          php artisan migrate --force
+          php artisan db:seed --force
+
       - name: Run PHPUnit
         working-directory: portal
         run: php artisan test
+        env:
+          MONDAY_API_TOKEN: ${{ secrets.MONDAY_API_TOKEN }}
+          MONDAY_CUSTOMERS_BOARD_ID: 5029327268
+          MONDAY_TICKETS_BOARD_ID: 5029331350
+          MONDAY_SERVICE_REPORT_BOARD_ID: 5029041107
 
       # ── Custom test suites ───────────────────────────────
       - name: TSR form tests (36/36)
