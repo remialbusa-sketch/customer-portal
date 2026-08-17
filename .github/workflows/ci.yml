@@ -10,9 +10,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      # SQLite is file-based — no service needed.
-
     steps:
       - uses: actions/checkout@v4
 
