@@ -106,7 +106,7 @@ jobs:
 
     env:
       SSH_OPTS: >-
-        -i $HOME/.ssh/id_rsa
+        -i /home/runner/.ssh/id_rsa
         -o StrictHostKeyChecking=no
         -o UserKnownHostsFile=/dev/null
         -o KexAlgorithms=+diffie-hellman-group-exchange-sha256
