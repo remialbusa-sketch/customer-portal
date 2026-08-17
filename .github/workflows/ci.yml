@@ -137,23 +137,26 @@ jobs:
         working-directory: portal
         run: npm run build
 
-      # ── Deploy via FTP (lftp mirror: uploads only changed files) ─
-      - name: Restore source file mtimes from git (for delta upload)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git-restore-mtime lftp
-          git-restore-mtime portal
-
-      - name: Align vendor mtimes with composer.lock (skips vendor when lock is unchanged)
-        run: |
-          LOCK_TIME="$(git log -1 --format=%cI -- portal/composer.lock)"
-          find portal/vendor -exec touch -d "$LOCK_TIME" {} +
-
-      - name: Deploy changed files to cPanel via FTP
-        working-directory: portal
-        env:
-          FTP_USER: ${{ secrets.FTP_USERNAME }}
-          FTP_PASS: ${{ secrets.FTP_PASSWORD }}
-          FTP_SERVER: ${{ secrets.FTP_SERVER }}
-        run: |
-          lftp -u "$FTP_USER","$FTP_PASS" -e "set ftp:passive-mode on; set net:timeout 60; set net:max-retries 2; mirror -R --only-newer --delete --no-perms --no-umask --exclude-glob '.env*' --exclude-glob 'storage' --exclude-glob 'storage/**' --exclude-glob 'node_modules/**' --exclude-glob 'bootstrap/cache/**' --exclude-glob 'tests/**' --exclude-glob 'scripts/**' --exclude-glob 'phpunit.xml' --exclude-glob 'error_log' --exclude-glob 'public/storage/**' . /; bye" "$FTP_SERVER"
+      # ── Deploy via FTP (cPanel FTP account, root = portal dir) ─
+      - name: Deploy to cPanel via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: portal/
+          server-dir: /
+          timeout: 180000
+          exclude: |
+            **/.git*
+            **/.git*/**/**/*
+            **/node_modules/**
+            **/.env*
+            **/storage/**
+            **/bootstrap/cache/**
+            **/tests/**
+            **/scripts/**
+            **/phpunit.xml
+            **/error_log
