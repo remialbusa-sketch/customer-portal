@@ -32,7 +32,7 @@ new #[Layout('layouts.guest')] class extends Component
     {{-- Page heading --}}
     <div class="mb-6">
         <h2 class="font-display text-2xl font-bold text-brand-navy">Welcome back</h2>
-        <p class="mt-1 text-sm text-brand-slate">Sign in to your BioTechnical Solutions portal.</p>
+        <p class="mt-1 text-sm text-brand-slate">Sign in to your MC BioTechnical Solutions portal.</p>
     </div>
 
     <x-auth-session-status class="mb-4" :status="session('status')" />

@@ -11,7 +11,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#0A2540">
         <title>MCBIO SERVICE PORTAL</title>
-        <meta name="description" content="Sign in to the BioTechnical Solutions service portal. Open and track service tickets for the equipment we support.">
+        <meta name="description" content="Sign in to the MC BioTechnical Solutions service portal. Open and track service tickets for the equipment we support.">
 
         <link rel="icon" type="image/png" href="{{ asset('images/brand/favicon-mcbio.png') }}">
 
@@ -29,7 +29,7 @@
             <div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
                 <a href="/" class="flex items-center" wire:navigate>
                     <img src="{{ asset('images/brand/mcbio-logo.png') }}"
-                         alt="BioTechnical Solutions Inc."
+                         alt="MC BioTechnical Solutions Inc."
                          class="h-10 w-auto">
                 </a>
 
@@ -117,7 +117,7 @@
         <footer class="border-t border-brand-mist bg-white">
             <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 py-6 sm:flex-row">
                 <p class="text-xs text-brand-slate">
-                    &copy; {{ date('Y') }} BioTechnical Solutions Inc. &middot; All rights reserved.
+                    &copy; {{ date('Y') }} MC BioTechnical Solutions Inc. &middot; All rights reserved.
                 </p>
                 <p class="text-xs italic text-brand-slate">
                     Providing Services Beyond Expectations

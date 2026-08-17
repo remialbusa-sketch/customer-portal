@@ -35,7 +35,7 @@
                 <div class="relative z-10 p-10">
                     <a href="{{ url('/') }}" class="inline-flex items-center gap-3" wire:navigate>
                         <img src="{{ asset('images/brand/mcbio-logo.png') }}"
-                             alt="BioTechnical Solutions Inc."
+                             alt="MC BioTechnical Solutions Inc."
                              class="h-12 w-auto brightness-0 invert">
                     </a>
                 </div>
@@ -67,7 +67,7 @@
 
                 <header class="flex items-center justify-between px-6 py-5 md:hidden">
                     <a href="{{ url('/') }}" class="inline-flex items-center" wire:navigate>
-                        <img src="{{ asset('images/brand/mcbio-logo.png') }}" alt="BioTechnical Solutions Inc." class="h-10 w-auto">
+                        <img src="{{ asset('images/brand/mcbio-logo.png') }}" alt="MC BioTechnical Solutions Inc." class="h-10 w-auto">
                     </a>
                 </header>
 
@@ -94,7 +94,7 @@
                 </div>
 
                 <footer class="border-t border-brand-mist/60 px-6 py-4 text-center text-xs text-brand-slate/60">
-                    &copy; {{ date('Y') }} BioTechnical Solutions Inc. &middot; All rights reserved.
+                    &copy; {{ date('Y') }} MC BioTechnical Solutions Inc. &middot; All rights reserved.
                 </footer>
             </main>
         </div>

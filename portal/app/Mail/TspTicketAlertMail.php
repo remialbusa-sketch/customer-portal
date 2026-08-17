@@ -69,7 +69,7 @@ class TspTicketAlertMail extends Mailable
         return new Envelope(
             from: new Address(
                 config('mail.from.address'),
-                config('mail.from.name', 'BioTechnical Solutions')
+                config('mail.from.name', 'MC BioTechnical Solutions')
             ),
             // Keep the subject short — mobile notification truncation
             // happens around 60-80 chars on most carriers.
@@ -94,7 +94,7 @@ class TspTicketAlertMail extends Mailable
                 'acknowledgeUrl'       => $this->acknowledgeUrl,
                 'viewUrl'              => $this->viewUrl,
                 'alreadyAcknowledged'  => $this->alreadyAcknowledged,
-                'appName'              => config('app.name', 'BioTechnical Solutions'),
+                'appName'              => config('app.name', 'MC BioTechnical Solutions'),
             ],
         );
     }
