@@ -104,15 +104,6 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
 
-    env:
-      SSH_OPTS: >-
-        -i /home/runner/.ssh/id_rsa
-        -o StrictHostKeyChecking=no
-        -o UserKnownHostsFile=/dev/null
-        -o KexAlgorithms=+diffie-hellman-group-exchange-sha256
-        -o HostKeyAlgorithms=+ssh-rsa
-        -o PubkeyAcceptedAlgorithms=+ssh-rsa
-
     steps:
       - uses: actions/checkout@v4
 
@@ -146,30 +137,26 @@ jobs:
         working-directory: portal
         run: npm run build
 
-      # ── Deploy via native SSH/rsync (legacy-KEX compatible) ─
-      - name: Write SSH key
-        run: |
-          mkdir -p "$HOME/.ssh"
-          echo "${{ secrets.CPANEL_SSH_KEY }}" > "$HOME/.ssh/id_rsa"
-          chmod 600 "$HOME/.ssh/id_rsa"
-
-      - name: Sync files to cPanel
-        working-directory: portal
-        run: |
-          rsync -avz --delete \
-            --exclude '.git' \
-            --exclude '.env*' \
-            --exclude 'storage' \
-            --exclude 'bootstrap/cache/*' \
-            -e "ssh $SSH_OPTS" \
-            ./ "${{ secrets.CPANEL_USER }}@${{ secrets.CPANEL_HOST }}:${{ secrets.CPANEL_DEPLOY_PATH }}/portal/"
-
-      - name: Post-deploy setup
-        run: |
-          ssh $SSH_OPTS "${{ secrets.CPANEL_USER }}@${{ secrets.CPANEL_HOST }}" \
-            'cd ${{ secrets.CPANEL_DEPLOY_PATH }}/portal && \
-             php artisan migrate --force && \
-             php artisan config:cache && \
-             php artisan route:cache && \
-             php artisan view:cache && \
-             chmod -R 775 storage bootstrap/cache'
+      # ── Deploy via FTP (cPanel FTP account, root = portal dir) ─
+      - name: Deploy to cPanel via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: portal
+          server-dir: /
+          timeout: 180000
+          exclude: |
+            **/.git*
+            **/.git*/**/**/*
+            **/node_modules/**
+            **/.env*
+            **/storage/**
+            **/bootstrap/cache/**
+            **/tests/**
+            **/scripts/**
+            **/phpunit.xml
+            **/error_log
