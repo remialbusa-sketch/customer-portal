@@ -30,7 +30,7 @@ jobs:
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
         local-dir: portal/
-        server-dir: customer-portal.mcbtsi.com/portal/
+        server-dir: /
         exclude: |
           **/.git*
           **/.git*/**
