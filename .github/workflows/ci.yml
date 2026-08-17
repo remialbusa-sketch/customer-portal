@@ -30,6 +30,13 @@ jobs:
           cache: 'npm'
           cache-dependency-path: portal/package-lock.json
 
+      # ── Environment (before composer, so artisan scripts boot) ─
+      - name: Create .env
+        working-directory: portal
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
       # ── Composer ─────────────────────────────────────────
       - name: Install PHP dependencies
         working-directory: portal
@@ -39,16 +46,6 @@ jobs:
       - name: Install Node dependencies
         working-directory: portal
         run: npm ci
-
-      # ── Environment ──────────────────────────────────────
-      - name: Create .env
-        working-directory: portal
-        run: |
-          cp .env.example .env
-          php artisan key:generate
-        env:
-          APP_ENV: testing
-          APP_KEY: base64:ci-generated-key-placeholder-32-chars-ok=
 
       # ── Vite Build ───────────────────────────────────────
       - name: Build frontend assets
