@@ -1,0 +1,42 @@
+name: 🚀 Deploy website on push
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  web-deploy:
+    name: 🎉 Deploy
+    runs-on: ubuntu-latest
+    steps:
+    - name: 🚚 Get latest code
+      uses: actions/checkout@v6
+
+    - name: 🟢 Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: 📦 Install & build assets
+      working-directory: portal
+      run: |
+        npm ci
+        npm run build
+
+    - name: 📂 Sync files
+      uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+      with:
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        local-dir: portal/
+        server-dir: customer-portal.mcbtsi.com/portal/
+        exclude: |
+          **/.git*
+          **/.git*/**
+          **/node_modules/**
+          **/node_modules/**/*
+          vendor/
+          storage/
+          .env*
+          bootstrap/cache/
