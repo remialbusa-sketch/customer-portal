@@ -12,6 +12,12 @@ use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome');
 
+// Offline fallback page. Served from the service worker's cache when a
+// navigation fails while the device is offline (see public/sw.js). It
+// is a standalone HTML page — no @vite assets — so it renders with
+// zero network access.
+Route::view('/offline', 'offline')->name('offline');
+
 Route::view('profile', 'profile')
     ->middleware(['auth'])
     ->name('profile');

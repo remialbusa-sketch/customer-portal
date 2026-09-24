@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -11,6 +12,18 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withSchedule(function (Schedule $schedule): void {
+        // Offline TSR drainer (SyncPendingTsrReports). This is the
+        // server-side safety net for the browser queue: it catches
+        // rows that reached the DB but never reached Monday because
+        // no browser was open to fire the `online` drain. Runs every
+        // 5 minutes. Requires a cPanel cron entry running
+        // `php artisan schedule:run` every minute — see DEPLOY.md.
+        $schedule->call(fn () => app(\App\Actions\SyncPendingTsrReports::class)->execute())
+            ->everyFiveMinutes()
+            ->name('tsr-drainer')
+            ->withoutOverlapping();
+    })
     ->withBroadcasting(__DIR__.'/../routes/channels.php')
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([

@@ -292,7 +292,14 @@ async function drain() {
             try {
                 await fetch(syncUrlFor(ticket), {
                     method: 'POST',
-                    headers: { 'Accept': 'application/json' },
+                    headers: {
+                        'Accept': 'application/json',
+                        // POST route → VerifyCsrfToken requires the header
+                        // pair. A bare POST 419s and the server-side
+                        // drainer trigger silently never fires.
+                        'X-CSRF-TOKEN': csrfToken(),
+                        'X-XSRF-TOKEN': csrfToken(),
+                    },
                     credentials: 'same-origin',
                 });
             } catch (e) { /* silent */ }

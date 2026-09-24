@@ -116,6 +116,17 @@ bash scripts/deploy.sh
 
 ## Troubleshooting
 
+### Scheduler (offline TSR drainer)
+`SyncPendingTsrReports` (the Monday-sync safety net for offline TSRs) is
+registered to run every 5 minutes in `bootstrap/app.php`. On cPanel, add a
+cron job (cPanel → Cron Jobs → every minute):
+
+```
+* * * * * cd /home/USER/CPANEL_DEPLOY_PATH && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Verify with: `php artisan schedule:list` (should show `tsr-drainer`).
+
 ### Deploy fails with "Permission denied"
 - Check `deploy_key.pub` is in cPanel's `~/.ssh/authorized_keys`
 - Verify cPanel user has write access to `CPANEL_DEPLOY_PATH`

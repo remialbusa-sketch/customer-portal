@@ -167,6 +167,18 @@
         </div>
     @endif
 
+    {{-- Queued offline — the submit was intercepted before Livewire's
+         network request and stored in the device queue (IndexedDB /
+         localStorage). It will POST to the server on the next drain
+         trigger (online event, 60s poll, or "Sync to Monday"). --}}
+    <div class="mx-5 mt-4 alert alert-warning" role="status" x-show="offlineQueued" x-cloak>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <div class="text-sm">
+            <strong>Report saved on this device.</strong>
+            <span>No internet right now — it will sync to Monday.com automatically once you're back online. You can close this page safely.</span>
+        </div>
+    </div>
+
     {{-- ───────────────────── Draft autosave status ───────────────────── --}}
     <div
         class="mx-5 mt-4 alert alert-info"
@@ -718,6 +730,7 @@
                 window.__tspEmail = @json($tspEmail);
                 window.__tsrSyncUrl   = @json(route('tsp.tickets.tsr.sync',   ['id' => $ticketNumber]));
                 window.__tsrStatusUrl = @json(route('tsp.tickets.tsr.status', ['id' => $ticketNumber]));
+                window.__tsrStoreUrl  = @json(route('tsp.tickets.service-report.store', ['id' => $ticketNumber]));
             </script>
             <style>
                 /* The form lives inside a Breeze x-modal so we
@@ -791,6 +804,16 @@
                         draftSavedAt: null,
                         _draftManualTimer: null,
 
+                        // Offline-queue submit. When the TSP hits Submit
+                        // while offline, we intercept the form submit in
+                        // the capture phase (BEFORE Livewire's own network
+                        // request), queue the payload via window.submitTsr
+                        // (exposed by offline-tsr.js → IndexedDB), and show
+                        // the "saved on this device" banner. Online submits
+                        // are untouched — Livewire handles them as before.
+                        offlineQueued: false,
+                        _lastQueuedLocalId: null,
+
                         // ─── Lifecycle ───
                         init() {
                             if (this._initialized) return;
@@ -813,6 +836,23 @@
                             };
                             window.addEventListener('online',  update);
                             window.addEventListener('offline', update);
+
+                            // ── Offline submit interception ──
+                            // Registered on document in the CAPTURE phase
+                            // so it runs before Livewire's own submit
+                            // listener on the <form> element. When offline,
+                            // we stop the event entirely (no Livewire
+                            // roundtrip, no failed request) and queue the
+                            // payload locally instead. When online we do
+                            // nothing and Livewire submits as usual.
+                            document.addEventListener('submit', (ev) => {
+                                if (! ev.target || ! ev.target.matches('form')) return;
+                                if (! ev.target.closest('.tsr-form')) return;
+                                if (this.online) return;
+                                ev.preventDefault();
+                                ev.stopPropagation();
+                                this.submitOffline();
+                            }, true);
 
                             // Initial status fetch, then poll every 5s.
                             // The poll ALSO triggers a drain whenever
@@ -938,6 +978,28 @@
                                 }
                                 this._clearDraft();
                             });
+
+                            // Clear the draft once an OFFLINE-queued
+                            // report reaches the server. offline-tsr.js
+                            // dispatches 'tsr.synced' with the local_id
+                            // it just drained. We match against the
+                            // queued id AND the stored draft's id (the
+                            // user may have reopened the form, which
+                            // regenerates window.__tsrLocalId).
+                            window.addEventListener('tsr.synced', (ev) => {
+                                const lid = ev && ev.detail;
+                                if (! lid) return;
+                                let draftLid = null;
+                                try {
+                                    const raw = window.localStorage.getItem(this._draftKey);
+                                    if (raw) draftLid = (JSON.parse(raw) || {}).localId || null;
+                                } catch (e) { /* ignore */ }
+                                if (lid === this._lastQueuedLocalId || lid === draftLid) {
+                                    this.offlineQueued = false;
+                                    this._clearDraft();
+                                    this.fetchStatus();
+                                }
+                            });
                         },
 
                         // ─── Draft autosave ───
@@ -985,14 +1047,26 @@
                                 // values straight out of the DOM
                                 // (inputs / textareas / selects) so
                                 // the draft mirrors what the user sees.
+                                //
+                                // wire:model comes in variants (.live,
+                                // .blur, .debounce) which are distinct
+                                // ATTRIBUTE names for CSS purposes —
+                                // a plain [wire:model] selector misses
+                                // every narrative field (they're all
+                                // wire:model.live). Include them all.
                                 const fields = {};
                                 if (this.$el) {
                                     const controls = this.$el.querySelectorAll(
                                         'input[name], textarea[name], select[name], ' +
-                                        'input[wire\\:model], textarea[wire\\:model], select[wire\\:model]'
+                                        'input[wire\\:model], textarea[wire\\:model], select[wire\\:model], ' +
+                                        'input[wire\\:model\\.live], textarea[wire\\:model\\.live], select[wire\\:model\\.live], ' +
+                                        'input[wire\\:model\\.blur], textarea[wire\\:model\\.blur], select[wire\\:model\\.blur]'
                                     );
                                     controls.forEach((el) => {
                                         const key = el.getAttribute('wire:model')
+                                                 || el.getAttribute('wire:model.live')
+                                                 || el.getAttribute('wire:model.blur')
+                                                 || el.getAttribute('wire:model.debounce')
                                                  || el.name
                                                  || el.id;
                                         if (! key) return;
@@ -1046,6 +1120,15 @@
                                     localId:     window.__tsrLocalId || null,
                                     ticket:      window.__tsrTicketNumber || null,
                                     fields:      fields,
+                                    // Signature dataUrls live under their own
+                                    // key so _hydrateFromDraft()'s canvas
+                                    // restore path (_restoreSignature) can
+                                    // find them. Without this the restore
+                                    // loop's `skip` set drops the hidden
+                                    // inputs AND draft.signatures is
+                                    // undefined — signatures were saved but
+                                    // silently lost on every restore.
+                                    signatures:  sigs,
                                 };
                                 window.localStorage.setItem(this._draftKey, JSON.stringify(draft));
                             } catch (e) {
@@ -1123,7 +1206,8 @@
                             const findControl = (key) => {
                                 if (! this.$el) return null;
                                 return this.$el.querySelector(
-                                    `[wire\\:model="${key}"], [name="${key}"]`
+                                    `[wire\\:model="${key}"], [wire\\:model\\.live="${key}"], ` +
+                                    `[wire\\:model\\.blur="${key}"], [name="${key}"]`
                                 );
                             };
                             this._hydrating = true;
@@ -1190,7 +1274,7 @@
                                 // hidden input with this name. The
                                 // signature-pad component puts them
                                 // inside the same .signature-pad root.
-                                const root = this.$root.closest('[wire\:id]');
+                                const root = this.$root.closest('[wire\\:id]');
                                 if (! root) return;
                                 const inputs = root.querySelectorAll('input[type="hidden"]');
                                 for (const inp of inputs) {
@@ -1298,6 +1382,115 @@
                             this.manualSync(true /* silent */);
                         },
 
+                        // ─── Offline submit ───
+                        // Called from the document-level capture-phase
+                        // submit listener when we're offline. Hands the
+                        // payload to window.submitTsr() (offline-tsr.js),
+                        // which queues it in IndexedDB (localStorage
+                        // fallback) and drains it on the next online
+                        // event / 60s poll / manual sync.
+                        submitOffline() {
+                            const submitTsr = (typeof window !== 'undefined') ? window.submitTsr : null;
+                            if (! submitTsr) {
+                                // offline-tsr.js didn't load (blocked,
+                                // 404, very old browser). Be honest rather
+                                // than silently pretending it was saved.
+                                this.lastError = 'Offline saving is unavailable in this browser. Reconnect and submit again.';
+                                return;
+                            }
+                            const payload = this._buildOfflinePayload();
+                            Promise.resolve(submitTsr(payload)).then((res) => {
+                                if (res && res.path === 'queued') {
+                                    this._lastQueuedLocalId = payload.local_id;
+                                    this.offlineQueued = true;
+                                    // Flush the draft NOW so a tab close
+                                    // can't lose the latest keystrokes
+                                    // (the autosave timer may not have
+                                    // fired yet).
+                                    this._saveDraftNow();
+                                }
+                            }).catch((e) => {
+                                this.lastError = (e && e.message) ? e.message : 'Could not save offline.';
+                            });
+                        },
+
+                        // Mirror of the Livewire component's
+                        // buildPayload() — the exact JSON shape
+                        // StoreServiceReportRequest validates. Text
+                        // values come from the DOM (ground truth for
+                        // wire:ignore.self forms); computed/hidden state
+                        // comes from Livewire.
+                        //
+                        // wire:model variants (.live, .blur, .debounce)
+                        // are distinct attribute names for CSS — a
+                        // [wire:model] selector alone misses every
+                        // narrative field, so read them all.
+                        _buildOfflinePayload() {
+                            const vals = {};
+                            if (this.$el) {
+                                this.$el.querySelectorAll('input, textarea, select').forEach((el) => {
+                                    const k = el.getAttribute('wire:model')
+                                           || el.getAttribute('wire:model.live')
+                                           || el.getAttribute('wire:model.blur')
+                                           || el.getAttribute('wire:model.debounce')
+                                           || el.name;
+                                    if (! k) return;
+                                    // Hidden signature inputs are wanted;
+                                    // other hidden shims (tspWorkWithCsv)
+                                    // are not — tspWorkWith comes from Livewire.
+                                    if (el.type === 'hidden' && ! /SignatureDataUrl$/.test(k)) return;
+                                    if (el.type === 'checkbox') { vals[k] = !! el.checked; return; }
+                                    vals[k] = el.value;
+                                });
+                            }
+                            const g = (k) => (vals[k] === undefined || vals[k] === null) ? '' : String(vals[k]);
+                            const lw = (k, fallback) => {
+                                try {
+                                    const v = this.$wire.get(k);
+                                    if (v === undefined || v === null) return fallback;
+                                    // Livewire state is a reactive Proxy —
+                                    // IndexedDB's structured clone cannot
+                                    // serialize Proxies (throws "could not
+                                    // be cloned"), so unwrap to plain JSON.
+                                    return JSON.parse(JSON.stringify(v));
+                                } catch (e) { return fallback; }
+                            };
+                            return {
+                                local_id:            window.__tsrLocalId || '',
+                                ticket_number:       window.__tsrTicketNumber || '',
+                                client_submitted_at: new Date().toISOString(),
+                                service_status:      lw('serviceStatus', 'in_progress'),
+                                email:               window.__tspEmail || lw('email', ''),
+                                problem_and_concerns:     g('problemAndConcerns'),
+                                job_done:                 g('jobDone'),
+                                parts_replaced:           g('partsReplaced'),
+                                recommendation:           g('recommendation'),
+                                remarks:                  g('remarks'),
+                                log_in_date:              g('logInDate') || null,
+                                service_start_date_time:  g('serviceStartDateTime') || null,
+                                service_end_date_time:    g('serviceEndDateTime') || null,
+                                log_out_date:             g('logOutDate') || null,
+                                machine_system_serial_number: g('machineSystemSerialNumber'),
+                                software_version_no:      g('softwareVersionNo'),
+                                tsp_signature: {
+                                    name:      g('tspSignatureName'),
+                                    signature: g('tspSignatureDataUrl'),
+                                },
+                                customer_in_charge: {
+                                    full_name:     g('customerName'),
+                                    email_address: g('customerEmail'),
+                                    signature:     g('customerSignatureDataUrl'),
+                                },
+                                biomed_person_in_charge: {
+                                    name:          g('biomedName'),
+                                    email_address: g('biomedEmail'),
+                                    signature:     g('biomedSignatureDataUrl'),
+                                },
+                                tsp_work_with: lw('tspWorkWith', []),
+                                total_minutes: lw('totalMinutes', 0),
+                            };
+                        },
+
                         async manualSync(silent = false) {
                             if (this.syncInFlight) return;
                             if (! this.online) {
@@ -1315,6 +1508,16 @@
                                         headers: {
                                             'X-Requested-With': 'XMLHttpRequest',
                                             'Accept': 'application/json',
+                                            // POST route → VerifyCsrfToken. Without
+                                            // this the button 419s every time and
+                                            // the manual sync never fires.
+                                            'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') || {}).content || '',
+                                            'X-XSRF-TOKEN': (() => {
+                                                try {
+                                                    const m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+                                                    return m ? decodeURIComponent(m[1]) : '';
+                                                } catch (e) { return ''; }
+                                            })(),
                                         },
                                         credentials: 'same-origin',
                                     }
