@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Livewire\Bell;
 use App\Models\User;
 use App\Services\MondayClient;
 use App\Services\MondayCustomerDirectory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Livewire\Livewire;
 use Livewire\Volt\Volt;
 use Mockery;
 use Tests\TestCase;
@@ -160,10 +162,15 @@ class CustomerAutoProvisionTest extends TestCase
 
         $this->actingAs($user);
 
-        Volt::test('layout.navigation')
+        // The temporary-password notice lives INSIDE the notification
+        // bell (pinned entry), not as a separate floating card.
+        Livewire::test(Bell::class)
             ->assertSee('Temporary password')
             ->assertSee('Set password now')
             ->assertSee('Set up later');
+
+        // And it counts toward the unread badge.
+        $this->assertSame(1, Livewire::test(Bell::class)->unreadCount);
     }
 
     public function test_navigation_shows_notice_to_any_user_still_on_the_default_password(): void
@@ -179,7 +186,8 @@ class CustomerAutoProvisionTest extends TestCase
 
         $this->actingAs($user);
 
-        Volt::test('layout.navigation')
+        // Seeded-style TSP check moved to the Bell component too.
+        Livewire::test(Bell::class)
             ->assertSee('Temporary password')
             ->assertSee('Set password now')
             ->assertSee('Set up later');
@@ -196,7 +204,7 @@ class CustomerAutoProvisionTest extends TestCase
         $this->withSession(['passwordChangeDismissed' => true]);
         $this->actingAs($user);
 
-        Volt::test('layout.navigation')
+        Livewire::test(Bell::class)
             ->assertDontSee('Temporary password');
     }
 
@@ -219,7 +227,7 @@ class CustomerAutoProvisionTest extends TestCase
 
         $this->assertFalse($user->must_change_password);
 
-        Volt::test('layout.navigation')
+        Livewire::test(Bell::class)
             ->assertDontSee('Temporary password');
     }
 
@@ -264,7 +272,7 @@ class CustomerAutoProvisionTest extends TestCase
 
         $this->get('/dashboard')->assertOk();
 
-        Volt::test('layout.navigation')
+        Livewire::test(Bell::class)
             ->assertDontSee('Temporary password');
     }
 }

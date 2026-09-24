@@ -89,10 +89,5 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true,
-    "repositories": [{
-        "name": "packagist",
-        "type": "composer",
-        "url": "https://mirrors.tencent.com/repository/composer/"
-    }]
+    "prefer-stable": true
 }
