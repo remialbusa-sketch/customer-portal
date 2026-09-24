@@ -3,6 +3,7 @@
 namespace Tests\Feature\Auth;
 
 use App\Models\User;
+use App\Services\MondayClient;
 use App\Services\MondayCustomerDirectory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -31,6 +32,18 @@ class CustomerAutoProvisionTest extends TestCase
     {
         Mockery::close();
         parent::tearDown();
+    }
+
+    /**
+     * The customer dashboard pulls the ticket list from Monday at
+     * render time. Bind a mock returning zero tickets so the page
+     * renders without real credentials (CI has no MONDAY_API_TOKEN).
+     */
+    private function mockMondayClientForDashboard(): void
+    {
+        $monday = Mockery::mock(MondayClient::class);
+        $monday->shouldReceive('ticketsForCustomer')->andReturn([]);
+        $this->app->instance(MondayClient::class, $monday);
     }
 
     public function test_new_customer_on_monday_board_is_provisioned_and_can_log_in(): void
@@ -132,6 +145,7 @@ class CustomerAutoProvisionTest extends TestCase
         ]);
 
         $this->actingAs($user);
+        $this->mockMondayClientForDashboard();
 
         $this->get('/dashboard')->assertOk();
     }
@@ -234,6 +248,7 @@ class CustomerAutoProvisionTest extends TestCase
         $this->assertFalse($user->must_change_password);
         $this->assertTrue(Hash::check('New-Passw0rd!', $user->password));
 
+        $this->mockMondayClientForDashboard();
         $this->get('/dashboard')->assertOk();
     }
 
@@ -245,6 +260,7 @@ class CustomerAutoProvisionTest extends TestCase
         ]);
 
         $this->actingAs($user);
+        $this->mockMondayClientForDashboard();
 
         $this->get('/dashboard')->assertOk();
 

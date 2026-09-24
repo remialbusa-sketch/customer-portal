@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Services\MondayClient;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class CustomerDashboardController extends Controller
 {
@@ -14,7 +16,28 @@ class CustomerDashboardController extends Controller
         $user = $request->user();
 
         // Pull tickets from Monday that belong to this customer.
-        $tickets = $monday->ticketsForCustomer($user->email);
+        //
+        // Degrade gracefully: if Monday is unreachable (missing token,
+        // outage, rate limit, expired credentials) render the dashboard
+        // with zero tickets + a banner instead of a 500. The customer
+        // can still reach everything else; the ticket list is read-only
+        // mirror data and will come back on the next load.
+        try {
+            $tickets = $monday->ticketsForCustomer($user->email);
+        } catch (Throwable $e) {
+            Log::error('Customer dashboard: Monday unreachable; rendering empty dashboard', [
+                'user_id' => $user->id,
+                'error'   => $e->getMessage(),
+            ]);
+
+            return view('customer.dashboard', [
+                'user'              => $user,
+                'tickets'           => [],
+                'stats'             => ['total' => 0, 'open' => 0, 'in_progress' => 0, 'resolved' => 0],
+                'ticketsJson'       => [],
+                'mondayUnreachable' => true,
+            ]);
+        }
 
         // Newest first
         usort($tickets, fn ($a, $b) => strcmp($b['id'], $a['id']));
@@ -77,10 +100,11 @@ class CustomerDashboardController extends Controller
         }, $tickets);
 
         return view('customer.dashboard', [
-            'user'    => $user,
-            'tickets' => $tickets,
-            'stats'   => $stats,
-            'ticketsJson' => $ticketsJson,
+            'user'              => $user,
+            'tickets'           => $tickets,
+            'stats'             => $stats,
+            'ticketsJson'       => $ticketsJson,
+            'mondayUnreachable' => false,
         ]);
     }
 }

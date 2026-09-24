@@ -3,8 +3,10 @@
 namespace Tests\Feature\Auth;
 
 use App\Models\User;
+use App\Services\MondayClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Volt\Volt;
+use Mockery;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -63,6 +65,13 @@ class AuthenticationTest extends TestCase
         $user = User::factory()->create(['role' => 'customer']);
 
         $this->actingAs($user);
+
+        // The dashboard pulls the ticket list from Monday at render
+        // time. Bind a mock so the page renders without real
+        // credentials (CI has no MONDAY_API_TOKEN).
+        $monday = Mockery::mock(MondayClient::class);
+        $monday->shouldReceive('ticketsForCustomer')->andReturn([]);
+        $this->app->instance(MondayClient::class, $monday);
 
         $response = $this->get('/dashboard');
 

@@ -58,6 +58,10 @@ _push_run.ps1
 _pushout.txt
 _push_log.txt
 
+# --- Local build / data artifacts (never for the repo) ---
+*.zip
+portal-data.sql
+
 # --- IDE / editor ---
 .idea/
 .vscode/

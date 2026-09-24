@@ -28,6 +28,19 @@
                 </x-ui.toast>
             @endif
 
+            {{-- Monday unreachable: the controller degraded instead of
+                 erroring. Show a banner so the empty list isn't mistaken
+                 for "no tickets exist". --}}
+            @if (! empty($mondayUnreachable))
+                <div class="alert alert-warning" role="status">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M4.93 19h14.14a2 2 0 001.74-3L13.74 4a2 2 0 00-3.48 0L3.19 16.9a2 2 0 001.74 3z"/></svg>
+                    <div class="text-sm">
+                        <strong>Can't reach the ticket system right now.</strong>
+                        Your service requests aren't shown while we reconnect — please refresh in a few minutes.
+                    </div>
+                </div>
+            @endif
+
             {{-- ───── Quick glance (4 stat cards) ───── --}}
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <x-ui.card padding="p-4">
