@@ -70,6 +70,9 @@ new class extends Component
 
             <!-- Settings Dropdown -->
             <div class="hidden sm:flex sm:items-center sm:ms-4">
+                @if ($user)
+                    <livewire:bell />
+                @endif
                 @if ($user && $user->usingDefaultPassword() && ! session('passwordChangeDismissed'))
                     <button @click="noticeOpen = ! noticeOpen" type="button" aria-label="Temporary password notice"
                             class="relative me-1 inline-flex h-9 w-9 items-center justify-center rounded-full text-base-content/60 transition hover:bg-base-200 hover:text-base-content"

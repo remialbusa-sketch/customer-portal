@@ -71,6 +71,7 @@ class SyncPendingTsrReports
                         'local_id' => $r->local_id,
                         'error'    => $e->getMessage(),
                     ]);
+                    $this->notifySyncError($r);
                 }
             });
 
@@ -127,9 +128,39 @@ class SyncPendingTsrReports
                 'local_id' => $r->local_id,
                 'error'    => $e->getMessage(),
             ]);
+            $this->notifySyncError($r);
         }
 
         return $stats;
+    }
+
+    /**
+     * Bell notification to the owning TSP when a TSR fails to reach
+     * Monday. The Notifier dedupes against unread duplicates, so the
+     * 5-minute drainer retry cycle can't flood the bell while the
+     * row keeps failing.
+     */
+    protected function notifySyncError(ServiceReport $r): void
+    {
+        try {
+            $label = $this->monday->ticketName((int) $r->monday_ticket_id)
+                ?? ('#' . $r->monday_ticket_id);
+
+            app(\App\Services\Notifier::class)->send(
+                userId:   (int) $r->user_id,
+                type:     \App\Models\Notification::TYPE_TSR_ERROR,
+                title:    "TSR sync failed for {$label}",
+                body:     substr((string) $r->sync_error, 0, 200),
+                url:      '/tsp/service-reports/' . $r->id,
+                ticketId: (string) $r->monday_ticket_id,
+            );
+        } catch (\Throwable $e) {
+            // Notification is cosmetic - never mask the sync error.
+            Log::warning('TSR sync-error notification failed', [
+                'local_id' => $r->local_id,
+                'error'    => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -157,11 +188,18 @@ class SyncPendingTsrReports
         // re-upload path is the ReuploadSignatures command.
         $tsrItemId = (int) $r->monday_tsr_item_id;
         if ($tsrItemId <= 0) {
+            // Item name uses the ticket's NAME (TICKET-00081) rather
+            // than the raw Monday item id, so the TSR board reads the
+            // same way the portal does. Falls back to the numeric id
+            // when the name can't be resolved.
+            $ticketLabel = $this->monday->ticketName((int) $r->monday_ticket_id)
+                ?? ('#' . $r->monday_ticket_id);
+
             $result = $this->monday->createServiceReportItem([
                 'ticket_item_id'            => (int) $r->monday_ticket_id,
                 'item_name'                 => sprintf(
-                    'TSR for #%d — %s',
-                    (int) $r->monday_ticket_id,
+                    'TSR for %s — %s',
+                    $ticketLabel,
                     $r->service_start_at?->format('Y-m-d H:i') ?? now()->format('Y-m-d H:i')
                 ),
                 'service_status'            => $status->value,

@@ -176,4 +176,14 @@ class User extends Authenticatable
             ->orderByDesc('is_primary')
             ->orderByDesc('updated_at');
     }
+
+    /**
+     * Bell notifications addressed to this user (created by
+     * App\Services\Notifier). Distinct from Notifiable::notifications()
+     * — the framework database-notifications table isn't used here.
+     */
+    public function bellNotifications(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Models\Notification::class)->latest();
+    }
 }

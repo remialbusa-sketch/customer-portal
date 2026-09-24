@@ -845,6 +845,24 @@ class Dashboard extends Component
             toName:         (string) $target->name,
         ));
 
+        // Bell notification for the target TSP. Best-effort.
+        try {
+            app(\App\Services\Notifier::class)->send(
+                userId:   (int) $target->id,
+                type:     \App\Models\Notification::TYPE_TRANSFER,
+                title:    "{$user->name} wants to transfer a ticket to you",
+                body:     'Ticket #' . $id . ' - open your dashboard to accept or decline.',
+                url:      '/tsp/dashboard',
+                ticketId: $id,
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Transfer-request notification failed', [
+                'ticket_id' => $id,
+                'to_user'   => $target->id,
+                'error'     => $e->getMessage(),
+            ]);
+        }
+
         $this->loadMyPendingTransfers();
 
         $this->dispatch('toast', type: 'success', title: 'Transfer requested', body: "{$target->name} needs to accept ticket #{$id} before it moves. They'll see the request on their dashboard.");
@@ -945,6 +963,25 @@ class Dashboard extends Component
             toUserId:       (int) $user->id,
             toName:         (string) $user->name,
         ));
+
+        // Bell notification for the original holder: the ticket left
+        // their queue. Best-effort.
+        try {
+            app(\App\Services\Notifier::class)->send(
+                userId:   (int) $transfer->from_user_id,
+                type:     \App\Models\Notification::TYPE_TRANSFER,
+                title:    "{$user->name} accepted the transfer of Ticket #{$transfer->monday_ticket_id}",
+                body:     'The ticket is no longer in your queue.',
+                url:      '/tsp/dashboard',
+                ticketId: (string) $transfer->monday_ticket_id,
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Transfer-accepted notification failed', [
+                'ticket_id' => $transfer->monday_ticket_id,
+                'from_user' => $transfer->from_user_id,
+                'error'     => $e->getMessage(),
+            ]);
+        }
 
         $this->loadLists($monday);
 

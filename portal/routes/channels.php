@@ -133,6 +133,21 @@ Broadcast::channel('ticket.{mondayId}.customer', function (User $user, string $m
 
 /*
 |--------------------------------------------------------------------------
+| Per-user notification channel
+|--------------------------------------------------------------------------
+| Channel: `private-user.{id}`
+|
+| The bell in the navigation listens here. Anyone may subscribe ONLY
+| to their own channel — the id in the channel name must equal the
+| authenticated user's id, so user A can never receive user B's
+| notification pings.
+*/
+Broadcast::channel('user.{userId}', function (User $user, string $userId) {
+    return (int) $user->id === (int) $userId;
+});
+
+/*
+|--------------------------------------------------------------------------
 | Region-scoped TSP channels
 |--------------------------------------------------------------------------
 | Channels: `private-region.ncr`, `private-region.north-luzon`,

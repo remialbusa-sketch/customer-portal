@@ -194,6 +194,39 @@ class TicketController extends Controller
             ]);
         }
 
+        // Bell notifications for TSPs in the ticket's region. Same
+        // region resolution the broadcast used; resolvable-region TSPs
+        // only (a TSP with no region can't claim regional tickets
+        // anyway). Best-effort - a Notifier hiccup must never fail
+        // the ticket submission.
+        try {
+            if (! empty($regionCode)) {
+                $tspUrl = '/tsp/tickets/' . (string) $result['id'];
+                $recipients = \App\Models\User::query()
+                    ->whereIn('role', ['fse', 'its', 'manager'])
+                    ->where('status', 'active')
+                    ->get(['id', 'region', 'branch', 'address']);
+                foreach ($recipients as $tsp) {
+                    if (\App\Support\RegionResolver::resolveForCustomer($tsp) !== $regionCode) {
+                        continue;
+                    }
+                    app(\App\Services\Notifier::class)->send(
+                        userId:   (int) $tsp->id,
+                        type:     \App\Models\Notification::TYPE_CLAIMABLE,
+                        title:    "New claimable ticket in {$regionCode}",
+                        body:     $data['subject'],
+                        url:      $tspUrl,
+                        ticketId: (string) $result['id'],
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Claimable-ticket notifications failed', [
+                'ticket_id' => $result['id'] ?? null,
+                'error'     => $e->getMessage(),
+            ]);
+        }
+
         return redirect()
             ->route('dashboard')
             ->with('status', "Ticket #{$result['id']} submitted — our team has been notified.");

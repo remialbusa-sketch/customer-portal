@@ -12,6 +12,7 @@ use App\Http\Requests\StoreServiceReportRequest;
 use App\Models\ServiceReport;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\MondayClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -47,9 +48,33 @@ class ServiceReportController extends Controller
         $report = ServiceReport::with('user')->findOrFail($id);
         $this->authorizeTicketAccess(auth()->user(), $this->loadMondayTicket($report->monday_ticket_id));
 
+        // Human ticket label for the header (TICKET-00081, with a
+        // numeric fallback if Monday can't resolve the name).
+        $monday = app(MondayClient::class);
+        $ticketName = $monday->ticketName((int) $report->monday_ticket_id)
+            ?? ('#' . $report->monday_ticket_id);
+
+        // Signature previews. The PNGs live on the private local
+        // disk, so the view fetches them through the same signed,
+        // time-limited URL Monday uses (10-min expiry is plenty for
+        // a page view; regenerate on each load).
+        $signatures = [];
+        foreach (['tsp' => $report->tsp_signature_path, 'customer' => $report->customer_signature_path, 'biomed' => $report->biomed_signature_path] as $role => $path) {
+            $signatures[$role] = ($path !== null && \Illuminate\Support\Facades\Storage::disk('local')->exists($path))
+                ? \Illuminate\Support\Facades\URL::temporarySignedRoute(
+                    'signatures.show',
+                    now()->addMinutes(60),
+                    ['localId' => $report->local_id, 'role' => $role],
+                    absolute: false,
+                )
+                : null;
+        }
+
         return view('tsp.service-report-show', [
-            'report' => $report,
-            'user'   => auth()->user(),
+            'report'     => $report,
+            'user'       => auth()->user(),
+            'ticketName' => $ticketName,
+            'signatures' => $signatures,
         ]);
     }
 

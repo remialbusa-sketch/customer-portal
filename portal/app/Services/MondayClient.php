@@ -550,6 +550,100 @@ class MondayClient
     }
 
     /**
+     * Resolve a ticket's NAME ("TICKET-00081") from the cached board
+     * listing, falling back to getItem (5s cache) and finally null.
+     * Used so Monday-facing copy (TSR item names, notifications)
+     * shows the human ticket label instead of the numeric item id.
+     */
+    public function ticketName(int $ticketItemId): ?string
+    {
+        // Cheap path: the cached board listing covers the whole
+        // tickets board in one API call (30-60s cache).
+        $cached = $this->listTickets();
+        foreach ($cached as $t) {
+            if ((string) ($t['id'] ?? '') === (string) $ticketItemId) {
+                $name = trim((string) ($t['name'] ?? ''));
+                return $name !== '' ? $name : null;
+            }
+        }
+
+        // Not on the board listing (archived? filtered?) - direct
+        // getItem is 5s-cached so a batch of drain rows costs at
+        // most one call per distinct ticket.
+        $item = $this->getItem((string) $ticketItemId);
+        $name = trim((string) ($item['name'] ?? ''));
+        return $name !== '' ? $name : null;
+    }
+
+    /**
+     * Bell notifications for a ticket status change: the owning
+     * customer plus the assigned TSP(s). Best-effort and deduped
+     * by Notifier (an unchanged unread copy is never re-stacked).
+     */
+    protected function notifyTicketStatusChange(int $ticketItemId, string $newLabel): void
+    {
+        try {
+            $item = $this->getItem((string) $ticketItemId);
+            if (! $item) {
+                return;
+            }
+            $name  = trim((string) ($item['name'] ?? '')) ?: ('#' . $ticketItemId);
+            $title = "{$name} is now {$newLabel}";
+
+            $notifier = app(Notifier::class);
+
+            // Customer (matched by the ticket's email column).
+            $email = strtolower(trim((string) ($item['column_values']['email']['text'] ?? '')));
+            if ($email !== '') {
+                $customer = \App\Models\User::where('email', $email)
+                    ->where('role', 'customer')
+                    ->first(['id']);
+                if ($customer) {
+                    $notifier->send(
+                        userId:   (int) $customer->id,
+                        type:     \App\Models\Notification::TYPE_STATUS,
+                        title:    $title,
+                        body:     'Your ticket status was updated on Monday.com.',
+                        url:      '/tickets/' . $ticketItemId,
+                        ticketId: (string) $ticketItemId,
+                    );
+                }
+            }
+
+            // Assigned TSP(s) via the People column.
+            $peopleCol = (string) config('services.monday.tickets_columns.tsp');
+            $raw = $item['column_values'][$peopleCol]['value'] ?? null;
+            $decoded = is_string($raw) ? (json_decode($raw, true) ?: []) : (is_array($raw) ? $raw : []);
+            $personIds = [];
+            foreach (($decoded['personsAndTeams'] ?? []) as $row) {
+                if (isset($row['id'])) {
+                    $personIds[] = (string) $row['id'];
+                }
+            }
+            if (! empty($personIds)) {
+                $tsps = \App\Models\User::query()
+                    ->whereIn('monday_id', $personIds)
+                    ->get(['id']);
+                foreach ($tsps as $tsp) {
+                    $notifier->send(
+                        userId:   (int) $tsp->id,
+                        type:     Notification::TYPE_STATUS,
+                        title:    $title,
+                        body:     'Ticket status updated on Monday.com.',
+                        url:      '/tsp/tickets/' . $ticketItemId,
+                        ticketId: (string) $ticketItemId,
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Ticket status-change notification failed', [
+                'ticket_item_id' => $ticketItemId,
+                'error'          => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Claim a ticket for a TSP: writes their person ID into the People
      * column and flips the status95 to "AWAITING" so the ticket counts
      * as awaiting on the TSP dashboard.
@@ -1667,6 +1761,10 @@ class MondayClient
             throw $e;
         }
 
+        // Bell notifications: customer + assigned TSPs. Best-effort,
+        // deduped by Notifier.
+        $this->notifyTicketStatusChange($ticketItemId, $newLabel);
+
         // Set resolution_date to today when the service is COMPLETED.
         // This write is best-effort: if the ticket got archived
         // between the status write and this one, swallow it.
@@ -1771,6 +1869,8 @@ class MondayClient
                 previousStatus: $previousStatus,
                 newStatus:      'IN-PROGRESS',
             ));
+
+            $this->notifyTicketStatusChange($ticketItemId, 'IN-PROGRESS');
         } catch (\Throwable $e) {
             // Best-effort: the chat message itself already landed.
             // A hiccup flipping the status column must not 500 the

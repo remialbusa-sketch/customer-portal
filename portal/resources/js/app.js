@@ -19,3 +19,26 @@ import './customer-ticket-banner.js';
 import './ticket-filter.js';
 
 window.echo = getEcho;
+
+// ---------------------------------------------------------------------
+//  Notification bell realtime boost
+//  ---------------------------------------------------------------------
+//  When Pusher is configured, a NotificationCreated broadcast lands on
+//  the user's private `user.{id}` channel. We re-dispatch it as a
+//  `bell-refresh` window event, which the Bell Livewire component
+//  listens for. When Pusher ISN'T configured (cPanel build), getEcho()
+//  returns null and the bell's 45s wire:poll is the only path.
+(function () {
+    const meta = document.querySelector('meta[name="auth-user-id"]');
+    const userId = meta ? meta.getAttribute('content') : null;
+    if (! userId) return;
+    const echo = window.echo();
+    if (! echo) return;
+    try {
+        echo.private('user.' + userId).listen('.notifications.updated', () => {
+            window.dispatchEvent(new CustomEvent('bell-refresh'));
+        });
+    } catch (e) {
+        // Echo channel subscription is best-effort; polling covers it.
+    }
+})();
