@@ -330,10 +330,8 @@ class Dashboard extends Component
         // Available list stays empty and a regionWarning is shown
         // so the TSP knows why they see no tickets (was a silent
         // failure as of 2026-08-07).
-        $tspRegion = $user->region;
-        if (empty($tspRegion)) {
-            $tspRegion = \App\Support\RegionResolver::resolveForCustomer($user);
-        }
+        $tspRegion = \App\Support\RegionResolver::normalizeRegionCode($user->region)
+            ?? \App\Support\RegionResolver::resolveForCustomer($user);
         if (! empty($tspRegion)) {
             try {
                 $available = $monday->unclaimedTicketsForRegion($tspRegion);
@@ -564,10 +562,8 @@ class Dashboard extends Component
         // customer region here BEFORE writing to Monday. This stops
         // a TSP from claiming a ticket outside their region by
         // crafting a direct POST to this Livewire action.
-        $tspRegion = $user->region;
-        if (empty($tspRegion)) {
-            $tspRegion = \App\Support\RegionResolver::resolveForCustomer($user);
-        }
+        $tspRegion = \App\Support\RegionResolver::normalizeRegionCode($user->region)
+            ?? \App\Support\RegionResolver::resolveForCustomer($user);
         if (empty($tspRegion) || ! $monday->ticketIsInRegion((int) $id, $tspRegion)) {
             Log::warning('Livewire Dashboard::claim rejected — ticket outside TSP region', [
                 'ticket_id' => $id,

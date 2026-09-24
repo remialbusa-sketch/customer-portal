@@ -441,13 +441,22 @@ class MondayClient
      * ticket's email column). Used by the TSP dashboard to show the
      * regional pool filtered to the TSP's own region.
      *
+     * Region resolution goes through RegionResolver::resolveForCustomer()
+     * (region column → branch → address keyword scan) instead of the raw
+     * `users.region` column. Customers frequently have region = NULL with
+     * only a free-text branch ("St. Luke's BGC"); with the raw-column read
+     * those tickets got customer_region = null and NO TSP of any region
+     * ever saw them in the claimable pool — the "no claimable tickets"
+     * bug of 2026-09-24.
+     *
      * @return array<int, array> tickets with 'customer_region' added
      */
     public function unclaimedTicketsForRegion(string $regionCode): array
     {
         $pool = $this->unclaimedTickets();
 
-        // Resolve region for each ticket from the local users table
+        // Resolve region for each ticket from the local users table,
+        // full RegionResolver chain (column → branch → address).
         $regionMap = [];
         $emails = array_filter(array_map(
             static fn (array $t) => $t['item']['column_values']['email']['text'] ?? null,
@@ -456,17 +465,25 @@ class MondayClient
         if (! empty($emails)) {
             $users = \App\Models\User::whereIn('email', array_map('strtolower', $emails))
                 ->where('role', 'customer')
-                ->pluck('region', 'email');
-            foreach ($users as $email => $region) {
-                $regionMap[strtolower($email)] = $region;
+                ->get(['email', 'region', 'branch', 'address']);
+            foreach ($users as $user) {
+                $resolved = \App\Support\RegionResolver::resolveForCustomer($user);
+                if ($resolved !== null) {
+                    $regionMap[strtolower($user->email)] = $resolved;
+                }
             }
         }
+
+        // Normalize the caller's region too — legacy TSP rows still
+        // carry free-text values ("NLuzon") that map to NORTH LUZON.
+        $wanted = \App\Support\RegionResolver::normalizeRegionCode($regionCode)
+            ?? strtoupper(trim($regionCode));
 
         $result = [];
         foreach ($pool as $t) {
             $email = strtolower(trim($t['item']['column_values']['email']['text'] ?? ''));
             $t['customer_region'] = $regionMap[$email] ?? null;
-            if ($t['customer_region'] === $regionCode) {
+            if ($t['customer_region'] === $wanted) {
                 $result[] = $t;
             }
         }
@@ -505,11 +522,11 @@ class MondayClient
             return false;
         }
 
-        $region = \App\Models\User::where('email', $email)
+        $user = \App\Models\User::where('email', $email)
             ->where('role', 'customer')
-            ->value('region');
+            ->first(['region', 'branch', 'address']);
 
-        if ($region === null) {
+        if ($user === null) {
             return false;
         }
 
@@ -517,9 +534,19 @@ class MondayClient
         // free-text values like "Cebu" → "VISAYAS" and upper-cases),
         // then compare strictly — same 4-broad taxonomy the pool and
         // the TSP's own region use.
-        $normalized = \App\Support\RegionResolver::normalizeRegionCode((string) $region);
+        // Resolve the CUSTOMER side through the same full chain the
+        // claimable pool uses (region column -> branch -> address).
+        // Comparing the raw column here while the pool resolves via
+        // branch would let a ticket into the pool and then reject
+        // its claim.
+        $normalized = \App\Support\RegionResolver::resolveForCustomer($user);
 
-        return $normalized !== null && $normalized === strtoupper($regionCode);
+        // Normalize the TSP side through the same resolver chain
+        // (legacy free-text rows like "NLuzon" map to NORTH LUZON).
+        $wanted = \App\Support\RegionResolver::normalizeRegionCode($regionCode)
+            ?? strtoupper(trim($regionCode));
+
+        return $normalized !== null && $normalized === $wanted;
     }
 
     /**

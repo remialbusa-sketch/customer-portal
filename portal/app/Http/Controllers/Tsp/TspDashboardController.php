@@ -95,10 +95,8 @@ class TspDashboardController extends Controller
         // ticket's customer region here BEFORE writing to Monday.
         // Without this a TSP could claim a ticket outside their
         // region by posting a crafted ticket id.
-        $tspRegion = $user->region;
-        if (empty($tspRegion)) {
-            $tspRegion = \App\Support\RegionResolver::resolveForCustomer($user);
-        }
+        $tspRegion = \App\Support\RegionResolver::normalizeRegionCode($user->region)
+            ?? \App\Support\RegionResolver::resolveForCustomer($user);
         if (empty($tspRegion) || ! $monday->ticketIsInRegion((int) $id, $tspRegion)) {
             Log::warning('TspDashboardController::claim rejected — ticket outside TSP region', [
                 'ticket_id' => $id,
