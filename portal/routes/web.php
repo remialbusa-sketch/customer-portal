@@ -12,6 +12,15 @@ use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome');
 
+// Nav search quick-jump (Figma top nav box). Auth-only; the
+// controller branches by role. Registered BEFORE /tickets/{id}
+// so the literal "go" is never captured as a ticket id.
+Route::middleware(['auth'])->get('/tickets/go', [\App\Http\Controllers\TicketSearchController::class, 'go'])
+    ->name('tickets.go');
+
+// Static Help & Support page (nav help icon + dashboard actions).
+Route::view('/help', 'help')->middleware(['auth'])->name('help');
+
 // Offline fallback page. Served from the service worker's cache when a
 // navigation fails while the device is offline (see public/sw.js). It
 // is a standalone HTML page — no @vite assets — so it renders with

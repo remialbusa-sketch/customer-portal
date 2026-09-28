@@ -234,7 +234,7 @@ new class extends Component
             >
                 @forelse ($messages as $msg)
                     <div data-server-id="{{ $msg['id'] }}" data-mine="{{ $msg['mine'] ? '1' : '0' }}" class="flex {{ $msg['mine'] ? 'justify-end' : 'justify-start' }}">
-                        <div class="max-w-[80%] rounded-lg px-3 py-1.5 text-sm
+                        <div class="max-w-[80%] rounded-xl px-3 py-1.5 text-sm
                                     {{ $msg['mine'] ? 'bg-primary text-primary-content' : 'bg-base-200 text-base-content' }}">
                             @if (! $msg['mine'])
                                 <div class="text-[10px] font-semibold mb-0.5 opacity-70">
@@ -289,12 +289,12 @@ new class extends Component
                         placeholder="Type a message…"
                         maxlength="2000"
                         autocomplete="off"
-                        class="input input-bordered input-sm flex-1 focus:outline-none focus:border-primary"
+                        class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 flex-1 focus:outline-none focus:border-primary"
                     >
                     <button
                         type="submit"
                         wire:loading.attr="disabled"
-                        class="btn btn-primary btn-sm"
+                        class="btn btn-primary btn-sm h-9 px-4"
                     >
                         Send
                     </button>

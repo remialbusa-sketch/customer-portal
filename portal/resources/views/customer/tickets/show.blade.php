@@ -1,15 +1,15 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div class="min-w-0">
-                <p class="text-xs font-semibold tracking-widest uppercase text-base-content/50 mb-1">
+                <p class="text-[11px] font-medium uppercase tracking-wider text-base-content/50">
                     Service request
                 </p>
-                <h2 class="font-semibold text-2xl text-base-content leading-tight truncate">
+                <h2 class="font-bold text-3xl text-base-content leading-tight mt-1 truncate">
                     {{ $ticket['name'] ?: ('Ticket #' . $ticket['id']) }}@if(!empty($ticket['column_values']['text_mm5c1w5n']['text'])) &mdash; {{ $ticket['column_values']['text_mm5c1w5n']['text'] }}@endif
                 </h2>
             </div>
-            <a href="{{ route('dashboard') }}" class="btn btn-ghost btn-sm gap-1 self-start sm:self-auto">
+            <a href="{{ route('dashboard') }}" class="btn btn-ghost btn-sm gap-1.5 shrink-0">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                 Back to tickets
             </a>
@@ -32,23 +32,23 @@
         $brand    = $ticket['column_values']['text_mm5apcrc']['text'] ?? null;
         $model    = $ticket['column_values']['text_mm5am2kf']['text'] ?? null;
 
-        // Map status text → DaisyUI badge tone (matches the customer
-        // dashboard / create form so this view feels consistent).
+        // Map status text → Figma pill tone (matches the dashboards
+        // so this view feels consistent).
         $statusLower = strtolower((string) $status);
-        $statusBadge = match (true) {
+        $statusPill = match (true) {
             str_contains($statusLower, 'new') || str_contains($statusLower, 'open')
-                => 'badge-info',
+                => ['bg' => 'bg-[#EBF2FD]', 'text' => 'text-[#3977E8]'],
             str_contains($statusLower, 'progress')
-                => 'badge-warning',
+                => ['bg' => 'bg-[#FEF3C7]', 'text' => 'text-[#B45309]'],
             str_contains($statusLower, 'awaiting')
-                => 'badge-accent',
+                => ['bg' => 'bg-[#FDF2F8]', 'text' => 'text-[#C1447E]'],
             str_contains($statusLower, 'resolved')
                 || str_contains($statusLower, 'closed')
                 || str_contains($statusLower, 'done')
                 || str_contains($statusLower, 'complete')
-                => 'badge-success',
+                => ['bg' => 'bg-[#E3F7F3]', 'text' => 'text-[#17847A]'],
             default
-                => 'badge-ghost',
+                => ['bg' => 'bg-base-200', 'text' => 'text-base-content/60'],
         };
 
         // `isClosed` is the canonical "this ticket can no longer
@@ -182,7 +182,7 @@
                     <div>
                         <div class="text-[11px] font-semibold text-base-content/60 uppercase tracking-wider">Status</div>
                         @if ($status)
-                            <span class="badge {{ $statusBadge }} badge-sm mt-1 gap-1 font-medium">
+                            <span class="inline-block rounded-md px-2 py-[3px] text-[11px] font-semibold mt-1 {{ $statusPill['bg'] }} {{ $statusPill['text'] }}">
                                 {{ $status }}
                             </span>
                         @else

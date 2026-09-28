@@ -282,7 +282,7 @@
                             <div class="space-y-2 mt-3">
                                 @foreach ([
                                     ['title' => 'Submit New Ticket', 'hint' => 'Report an issue or request', 'url' => route('tickets.create')],
-                                    ['title' => 'Help & Support', 'hint' => 'Guides and troubleshooting', 'url' => '#help-resources'],
+                                    ['title' => 'Help & Support', 'hint' => 'Guides and troubleshooting', 'url' => route('help')],
                                     ['title' => 'Account Settings', 'hint' => 'Profile, notifications & more', 'url' => route('profile')],
                                 ] as $action)
                                     <a href="{{ $action['url'] }}"
