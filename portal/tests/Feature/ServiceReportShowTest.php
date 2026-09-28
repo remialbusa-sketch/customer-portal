@@ -64,7 +64,7 @@ class ServiceReportShowTest extends TestCase
 
         $response->assertOk()
             ->assertSee('TICKET-00083')
-            ->assertSee('Service window')
+            ->assertSee('Service visit')
             ->assertSee('Equipment')
             ->assertSee('Work details')
             ->assertSee('Replaced main board, calibrated optics.')
