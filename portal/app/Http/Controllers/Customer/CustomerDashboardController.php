@@ -33,8 +33,9 @@ class CustomerDashboardController extends Controller
             return view('customer.dashboard', [
                 'user'              => $user,
                 'tickets'           => [],
-                'stats'             => ['total' => 0, 'open' => 0, 'in_progress' => 0, 'resolved' => 0],
+                'stats'             => ['total' => 0, 'open' => 0, 'in_progress' => 0, 'awaiting' => 0, 'resolved' => 0],
                 'ticketsJson'       => [],
+                'recentActivity'    => [],
                 'mondayUnreachable' => true,
             ]);
         }
@@ -43,13 +44,15 @@ class CustomerDashboardController extends Controller
         usort($tickets, fn ($a, $b) => strcmp($b['id'], $a['id']));
 
         // Compute ticket stats for the dashboard stat cards.
-        $stats = ['total' => count($tickets), 'open' => 0, 'in_progress' => 0, 'resolved' => 0];
+        $stats = ['total' => count($tickets), 'open' => 0, 'in_progress' => 0, 'awaiting' => 0, 'resolved' => 0];
         foreach ($tickets as $t) {
             $s = strtolower((string) ($t['status_text'] ?? ''));
             if (str_contains($s, 'resolved') || str_contains($s, 'closed') || str_contains($s, 'done') || str_contains($s, 'complete')) {
                 $stats['resolved']++;
             } elseif (str_contains($s, 'progress')) {
                 $stats['in_progress']++;
+            } elseif (str_contains($s, 'awaiting')) {
+                $stats['awaiting']++;
             } elseif ($s !== '' && $s !== '—') {
                 $stats['open']++;
             }
@@ -91,6 +94,7 @@ class CustomerDashboardController extends Controller
                 'status_text'       => $t['status_text'] ?? '—',
                 'subject_text'      => $t['subject_text'] ?: $t['name'],
                 'request_type_text' => $t['request_type_text'] ?? null,
+                'priority_text'     => $t['priority_text'] ?? null,
                 'account_name'      => $t['account_name'] ?? null,
                 'brand'             => $brand,
                 'model'             => $model,
@@ -99,11 +103,25 @@ class CustomerDashboardController extends Controller
             ];
         }, $tickets);
 
+        // Recent activity: the 4 newest tickets (already sorted desc).
+        // Derived from data already loaded — no extra Monday calls.
+        // No fabricated timestamps: rows show subject + status only.
+        $recentActivity = array_slice(array_map(function (array $t) {
+            return [
+                'id'           => $t['id'],
+                'name'         => $t['name'],
+                'subject_text' => $t['subject_text'] ?: $t['name'],
+                'status_text'  => $t['status_text'] ?? '—',
+                '_statusBucket' => $t['_statusBucket'],
+            ];
+        }, $ticketsJson), 0, 4);
+
         return view('customer.dashboard', [
             'user'              => $user,
             'tickets'           => $tickets,
             'stats'             => $stats,
             'ticketsJson'       => $ticketsJson,
+            'recentActivity'    => $recentActivity,
             'mondayUnreachable' => false,
         ]);
     }
