@@ -110,7 +110,7 @@ new class extends Component
     class="bg-base-100 shadow sm:rounded-2xl p-6 border border-base-300/70"
 >
     <div class="flex items-center justify-between mb-4">
-        <h3 class="text-base font-semibold text-base-content">Time tracker</h3>
+        <h3 class="text-[15px] font-semibold text-base-content">Time tracker</h3>
         <div class="text-xs text-base-content/60 flex items-center gap-2">
             <template x-if="active">
                 <span class="inline-flex items-center gap-1 text-warning">

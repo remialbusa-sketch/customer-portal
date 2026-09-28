@@ -252,6 +252,10 @@ class Dashboard extends Component
         $user = auth()->user();
         $this->flashStatus = session('status');
 
+        // Prefill from nav search (?q=) — the search endpoint
+        // redirects multi-match results here.
+        $this->filters['query'] = (string) request()->query('q', $this->filters['query'] ?? '');
+
         $this->loadLists($monday);
     }
 

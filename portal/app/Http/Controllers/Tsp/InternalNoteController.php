@@ -110,15 +110,17 @@ class InternalNoteController extends Controller
         // string here keeps the view a one-liner.
         $statusText  = $item['column_values']['status95']['text'] ?? null;
         $statusLower = strtolower((string) $statusText);
+        // Figma pill language (solid soft pills, no dots) — kept in
+        // sync with ticketStatusPoller._badgeFor in the view.
         $statusBadge = match (true) {
-            str_contains($statusLower, 'new') || str_contains($statusLower, 'open') => 'badge-info',
-            str_contains($statusLower, 'progress') => 'badge-warning',
-            str_contains($statusLower, 'awaiting') => 'badge-accent',
+            str_contains($statusLower, 'new') || str_contains($statusLower, 'open') => 'bg-[#EBF2FD] text-[#3977E8]',
+            str_contains($statusLower, 'progress') => 'bg-[#FEF3C7] text-[#B45309]',
+            str_contains($statusLower, 'awaiting') => 'bg-[#FDF2F8] text-[#C1447E]',
             str_contains($statusLower, 'resolved')
                 || str_contains($statusLower, 'closed')
                 || str_contains($statusLower, 'done')
-                || str_contains($statusLower, 'complete') => 'badge-success',
-            default => 'badge-ghost',
+                || str_contains($statusLower, 'complete') => 'bg-[#E3F7F3] text-[#17847A]',
+            default => 'bg-base-200 text-base-content/60',
         };
         $pollerArgs = [
             'url'              => route('tsp.tickets.status', ['id' => $item['id']]),

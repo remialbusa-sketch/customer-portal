@@ -1,25 +1,25 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div>
-                <p class="text-xs font-semibold tracking-widest uppercase text-base-content/50 mb-1">
+                <p class="text-[11px] font-medium uppercase tracking-wider text-base-content/50">
                     New service request
                 </p>
-                <h2 class="font-semibold text-2xl text-base-content leading-tight">
+                <h2 class="font-bold text-3xl text-base-content leading-tight mt-1">
                     Tell us what's happening
                 </h2>
-                <p class="text-sm text-base-content/60 mt-1">
+                <p class="text-sm text-base-content/60 mt-1.5">
                     Our team will take it from there. We usually reply within a few hours during business days.
                 </p>
             </div>
-            <a href="{{ route('dashboard') }}" class="btn btn-ghost btn-sm gap-2 self-start">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+            <a href="{{ route('dashboard') }}" class="btn btn-ghost btn-sm gap-1.5 shrink-0">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
                 Back to dashboard
             </a>
         </div>
     </x-slot>
 
-    <div class="py-8">
+    <div class="py-2">
         <div class="max-w-3xl mx-auto sm:px-6 lg:px-8">
 
             {{-- ───── Existing-ticket warning ───── --}}
@@ -94,7 +94,7 @@
                 </x-ui.toast>
             @endif
 
-            <form method="POST" action="{{ route('tickets.store') }}" class="space-y-6">
+            <form method="POST" action="{{ route('tickets.store') }}" class="space-y-5">
                 @csrf
 
                 {{-- ───── Account info card ───── --}}
@@ -138,7 +138,7 @@
                                 <label class="block text-sm font-medium text-base-content mb-2">Your registered equipment</label>
                                 <div class="space-y-2">
                                     @foreach ($machines as $machine)
-                                        <label class="flex items-center gap-3 px-4 py-3 border border-base-300 rounded-lg cursor-pointer hover:bg-base-200/60 transition has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                                        <label class="flex items-center gap-3 px-4 py-3 border border-base-300 rounded-xl cursor-pointer hover:bg-base-200/60 transition has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                                             <input type="radio"
                                                    name="machine_id"
                                                    value="{{ $machine->id }}"
@@ -164,7 +164,7 @@
                                     @endforeach
 
                                     {{-- Manual entry option --}}
-                                    <label class="flex items-center gap-3 px-4 py-3 border border-dashed border-base-300 rounded-lg cursor-pointer hover:bg-base-200/60 transition has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                                    <label class="flex items-center gap-3 px-4 py-3 border border-dashed border-base-300 rounded-xl cursor-pointer hover:bg-base-200/60 transition has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                                         <input type="radio"
                                                name="machine_id"
                                                value=""
@@ -181,25 +181,25 @@
                                 {{-- Manual brand/model inputs --}}
                                 <div x-show="showManual" x-cloak class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div>
-                                        <label for="brand" class="block text-xs font-medium text-base-content/70 mb-1">Brand</label>
+                                        <label for="brand" class="block text-[13px] font-semibold text-base-content mb-1">Brand</label>
                                         <input type="text" id="brand" name="brand" maxlength="120"
                                                value="{{ old('brand') }}"
                                                placeholder="e.g. Mindray"
-                                               class="input input-bordered input-sm w-full">
+                                               class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full">
                                     </div>
                                     <div>
-                                        <label for="model" class="block text-xs font-medium text-base-content/70 mb-1">Model</label>
+                                        <label for="model" class="block text-[13px] font-semibold text-base-content mb-1">Model</label>
                                         <input type="text" id="model" name="model" maxlength="120"
                                                value="{{ old('model') }}"
                                                placeholder="e.g. BC-6800"
-                                               class="input input-bordered input-sm w-full">
+                                               class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full">
                                     </div>
                                     <div>
-                                        <label for="serial" class="block text-xs font-medium text-base-content/70 mb-1">Serial #</label>
+                                        <label for="serial" class="block text-[13px] font-semibold text-base-content mb-1">Serial #</label>
                                         <input type="text" id="serial" name="serial" maxlength="120"
                                                value="{{ old('serial') }}"
                                                placeholder="Optional"
-                                               class="input input-bordered input-sm w-full">
+                                               class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full">
                                     </div>
                                 </div>
                             </div>
@@ -215,25 +215,25 @@
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div>
-                                    <label for="brand" class="block text-sm font-medium text-base-content mb-1">Brand</label>
+                                    <label for="brand" class="block text-[13px] font-semibold text-base-content mb-1">Brand</label>
                                     <input type="text" id="brand" name="brand" maxlength="120"
                                            value="{{ old('brand', $user->brand) }}"
                                            placeholder="e.g. Mindray"
-                                           class="input input-bordered w-full">
+                                           class="input input-bordered h-9 text-[13px] bg-base-200/50 w-full">
                                 </div>
                                 <div>
-                                    <label for="model" class="block text-sm font-medium text-base-content mb-1">Model</label>
+                                    <label for="model" class="block text-[13px] font-semibold text-base-content mb-1">Model</label>
                                     <input type="text" id="model" name="model" maxlength="120"
                                            value="{{ old('model', $user->model) }}"
                                            placeholder="e.g. BC-6800"
-                                           class="input input-bordered w-full">
+                                           class="input input-bordered h-9 text-[13px] bg-base-200/50 w-full">
                                 </div>
                                 <div>
-                                    <label for="serial" class="block text-sm font-medium text-base-content mb-1">Serial #</label>
+                                    <label for="serial" class="block text-[13px] font-semibold text-base-content mb-1">Serial #</label>
                                     <input type="text" id="serial" name="serial" maxlength="120"
                                            value="{{ old('serial', $user->serial_number) }}"
                                            placeholder="Optional"
-                                           class="input input-bordered w-full">
+                                           class="input input-bordered h-9 text-[13px] bg-base-200/50 w-full">
                                 </div>
                             </div>
                         @endif
@@ -269,25 +269,25 @@
                     </x-slot:icon>
                     <div class="px-5 py-4 space-y-4">
                         <div>
-                            <label for="subject" class="block text-sm font-medium text-base-content mb-1">
+                            <label for="subject" class="block text-[13px] font-semibold text-base-content mb-1">
                                 Subject <span class="text-error">*</span>
                             </label>
                             <input type="text" name="subject" id="subject" required maxlength="255"
                                    value="{{ old('subject') }}"
                                    placeholder="e.g. BC-6800 returns error code E-204 on startup"
-                                   class="input input-bordered w-full @error('subject') input-error @enderror">
+                                   class="input input-bordered h-9 text-[13px] bg-base-200/50 w-full @error('subject') input-error @enderror">
                             @error('subject')
                                 <p class="mt-1 text-xs text-error">{{ $message }}</p>
                             @enderror
                         </div>
 
                         <div>
-                            <label for="description" class="block text-sm font-medium text-base-content mb-1">
+                            <label for="description" class="block text-[13px] font-semibold text-base-content mb-1">
                                 Description <span class="text-error">*</span>
                             </label>
                             <textarea name="description" id="description" rows="5" required maxlength="5000"
                                       placeholder="What happened? When did it start? Any error messages, unusual sounds, or smells?"
-                                      class="textarea textarea-bordered w-full @error('description') textarea-error @enderror">{{ old('description') }}</textarea>
+                                      class="textarea textarea-bordered text-sm bg-base-200/50 w-full @error('description') textarea-error @enderror">{{ old('description') }}</textarea>
                             @error('description')
                                 <p class="mt-1 text-xs text-error">{{ $message }}</p>
                             @enderror
@@ -295,11 +295,11 @@
                         </div>
 
                         <div>
-                            <label for="request_type" class="block text-sm font-medium text-base-content mb-1">
+                            <label for="request_type" class="block text-[13px] font-semibold text-base-content mb-1">
                                 Request type <span class="text-error">*</span>
                             </label>
                             <select name="request_type" id="request_type" required
-                                    class="select select-bordered w-full @error('request_type') select-error @enderror">
+                                    class="select select-bordered h-9 text-[13px] bg-base-200/50 w-full @error('request_type') select-error @enderror">
                                 <option value="">Select type…</option>
                                 @foreach($requestTypes as $rt)
                                     <option value="{{ $rt }}" @selected(old('request_type') === $rt)>{{ $rt }}</option>
@@ -314,10 +314,10 @@
 
                 {{-- ───── Submit ───── --}}
                 <div class="flex items-center justify-end gap-3 pt-2">
-                    <a href="{{ route('dashboard') }}" class="btn btn-ghost">
+                    <a href="{{ route('dashboard') }}" class="btn btn-ghost h-11 px-5">
                         Cancel
                     </a>
-                    <button type="submit" class="btn btn-primary gap-2">
+                    <button type="submit" class="btn btn-primary gap-2 h-11 px-5">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                         Submit request
                     </button>

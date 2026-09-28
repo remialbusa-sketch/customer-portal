@@ -16,7 +16,15 @@
  */
 window.ticketFilter = (initial) => ({
     tickets: initial.tickets,
-    query: '',
+    // Prefill from nav search (?q=) — the search endpoint redirects
+    // multi-match results to the dashboard with the query attached.
+    query: (() => {
+        try {
+            return new URLSearchParams(window.location.search).get('q') || '';
+        } catch (e) {
+            return '';
+        }
+    })(),
     statusFilter: [],
     priorityFilter: [],
     tab: 'all',

@@ -206,7 +206,7 @@
                     <p class="text-sm text-base-content/60 mt-0.5">What did you service, and for how long?</p>
                 </div>
 
-                <div class="rounded-lg border border-base-300 bg-base-100 p-4 mb-4">
+                <div class="rounded-2xl border border-base-300/70 bg-base-100 p-5 shadow-sm mb-4">
                     <div class="flex items-center gap-2 mb-3">
                         <span class="w-6 h-6 rounded-md bg-primary/10 text-primary flex items-center justify-center" aria-hidden="true">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
@@ -219,7 +219,7 @@
                             <input
                                 type="text"
                                 wire:model.blur="machineSystemSerialNumber"
-                                class="input input-bordered input-sm w-full"
+                                class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full"
                                 placeholder="e.g. SN-2024-00123"
                                 autocomplete="off"
                             />
@@ -229,7 +229,7 @@
                             <input
                                 type="text"
                                 wire:model.blur="softwareVersionNo"
-                                class="input input-bordered input-sm w-full"
+                                class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full"
                                 placeholder="e.g. v3.2.1"
                                 autocomplete="off"
                             />
@@ -237,7 +237,7 @@
                     </div>
                 </div>
 
-                <div class="rounded-lg border border-base-300 bg-base-100 p-4">
+                <div class="rounded-2xl border border-base-300/70 bg-base-100 p-5 shadow-sm">
                     <div class="flex items-center justify-between gap-2 mb-3">
                         <div class="flex items-center gap-2">
                             <span class="w-6 h-6 rounded-md bg-accent/10 text-accent flex items-center justify-center" aria-hidden="true">
@@ -256,7 +256,7 @@
                             <input
                                 type="datetime-local"
                                 wire:model.live="logInDate"
-                                class="input input-bordered input-sm w-full"
+                                class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full"
                             />
                         </label>
                         <label class="form-control w-full">
@@ -264,7 +264,7 @@
                             <input
                                 type="datetime-local"
                                 wire:model.live="serviceStartDateTime"
-                                class="input input-bordered input-sm w-full"
+                                class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full"
                                 required
                             />
                         </label>
@@ -273,7 +273,7 @@
                             <input
                                 type="datetime-local"
                                 wire:model.live="serviceEndDateTime"
-                                class="input input-bordered input-sm w-full"
+                                class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full"
                                 required
                             />
                         </label>
@@ -282,7 +282,7 @@
                             <input
                                 type="datetime-local"
                                 wire:model.live="logOutDate"
-                                class="input input-bordered input-sm w-full"
+                                class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full"
                             />
                         </label>
                     </div>
@@ -305,7 +305,7 @@
                     <p class="text-sm text-base-content/60 mt-0.5">Describe the problem and what you did to fix it.</p>
                 </div>
 
-                <div class="rounded-lg border border-base-300 bg-base-100 p-4 mb-4">
+                <div class="rounded-2xl border border-base-300/70 bg-base-100 p-5 shadow-sm mb-4">
                     <div class="flex items-center gap-2 mb-3">
                         <span class="w-6 h-6 rounded-md bg-secondary/10 text-secondary flex items-center justify-center" aria-hidden="true">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -331,7 +331,7 @@
 
                 <div class="space-y-3">
                     @foreach ($narratives as $row)
-                        <div class="rounded-lg border border-base-300 bg-base-100 p-4">
+                        <div class="rounded-2xl border border-base-300/70 bg-base-100 p-5 shadow-sm">
                             <div class="flex items-start justify-between gap-2 mb-2">
                                 <label class="flex items-center gap-2 text-sm font-semibold text-base-content">
                                     @switch($row['icon'])
@@ -363,7 +363,7 @@
                             </div>
                             <textarea
                                 wire:model.live="{{ $row['wire'] }}"
-                                class="textarea textarea-bordered w-full text-sm leading-relaxed"
+                                class="textarea textarea-bordered w-full text-sm leading-relaxed bg-base-200/50"
                                 rows="3"
                                 maxlength="5000"
                                 placeholder="{{ $row['ph'] }}"
@@ -395,7 +395,7 @@
 
                 <div class="space-y-3">
                     {{-- TSP signature --}}
-                    <div class="rounded-lg border border-base-300 bg-base-100 p-4">
+                    <div class="rounded-2xl border border-base-300/70 bg-base-100 p-5 shadow-sm">
                         <div class="flex items-center gap-2 mb-3">
                             <span class="w-7 h-7 rounded-md bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">YOU</span>
                             <div>
@@ -408,7 +408,7 @@
                             <input
                                 type="text"
                                 wire:model="tspSignatureName"
-                                class="input input-bordered input-sm w-full"
+                                class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full"
                                 placeholder="{{ $tspName }}"
                             />
                         </label>
@@ -416,7 +416,7 @@
                     </div>
 
                     {{-- Customer signature --}}
-                    <div class="rounded-lg border border-base-300 bg-base-100 p-4">
+                    <div class="rounded-2xl border border-base-300/70 bg-base-100 p-5 shadow-sm">
                         <div class="flex items-center gap-2 mb-3">
                             <span class="w-7 h-7 rounded-md bg-secondary/10 text-secondary flex items-center justify-center text-xs font-bold">CST</span>
                             <div>
@@ -430,7 +430,7 @@
                                 <input
                                     type="text"
                                     wire:model="customerName"
-                                    class="input input-bordered input-sm w-full"
+                                    class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full"
                                     placeholder="Customer's full name"
                                 />
                             </label>
@@ -439,7 +439,7 @@
                                 <input
                                     type="email"
                                     wire:model="customerEmail"
-                                    class="input input-bordered input-sm w-full"
+                                    class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full"
                                     placeholder="customer@example.com"
                                 />
                             </label>
@@ -448,7 +448,7 @@
                     </div>
 
                     {{-- BIOMED signature --}}
-                    <div class="rounded-lg border border-base-300 bg-base-100 p-4">
+                    <div class="rounded-2xl border border-base-300/70 bg-base-100 p-5 shadow-sm">
                         <div class="flex items-center gap-2 mb-3">
                             <span class="w-7 h-7 rounded-md bg-accent/10 text-accent flex items-center justify-center text-xs font-bold">BMD</span>
                             <div>
@@ -462,7 +462,7 @@
                                 <input
                                     type="text"
                                     wire:model="biomedName"
-                                    class="input input-bordered input-sm w-full"
+                                    class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full"
                                     placeholder="Biomed contact's full name"
                                 />
                             </label>
@@ -471,7 +471,7 @@
                                 <input
                                     type="email"
                                     wire:model="biomedEmail"
-                                    class="input input-bordered input-sm w-full"
+                                    class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full"
                                     placeholder="biomed@example.com"
                                 />
                             </label>
@@ -486,7 +486,7 @@
                     $availableTspsJson = json_encode($availableTsps, JSON_THROW_ON_ERROR);
                 @endphp
                 <div
-                    class="mt-4 rounded-lg border border-base-300 bg-base-100 p-4"
+                    class="mt-4 rounded-2xl border border-base-300/70 bg-base-100 p-5 shadow-sm"
                     x-data='{
                         search: "",
                         open: false,
@@ -581,7 +581,7 @@
                                     x-model="search"
                                     @focus="open = true"
                                     placeholder="Search technicians by name, role, or Monday ID…"
-                                    class="input input-bordered input-sm w-full pl-7"
+                                    class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 w-full pl-7"
                                     autocomplete="off"
                                 />
                             </div>
@@ -686,7 +686,7 @@
 
             <button
                 type="button"
-                class="btn btn-primary btn-sm gap-1.5"
+                class="btn btn-primary btn-sm h-11 px-5 gap-1.5"
                 x-show="currentStep < 3"
                 x-cloak
                 @click="goToStep(currentStep + 1)"
@@ -697,7 +697,7 @@
 
             <button
                 type="submit"
-                class="btn btn-primary btn-sm gap-1.5"
+                class="btn btn-primary btn-sm h-11 px-5 gap-1.5"
                 x-show="currentStep === 3"
                 x-cloak
                 wire:loading.attr="disabled"

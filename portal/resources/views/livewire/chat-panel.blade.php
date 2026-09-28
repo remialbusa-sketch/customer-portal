@@ -121,7 +121,7 @@ new class extends Component
     class="bg-base-100 shadow sm:rounded-2xl flex flex-col h-[640px] border border-base-300/70"
 >
     <div class="px-6 py-4 border-b border-base-300/70 flex items-center justify-between">
-        <h3 class="text-base font-semibold text-base-content">
+        <h3 class="text-[15px] font-semibold text-base-content">
             Chat with {{ $currentUserRole === 'customer' ? 'our support team' : 'the customer' }}
             <span class="ml-2 text-xs font-mono text-base-content/40">{{ $ticketName ?: ('Ticket #' . $ticketId) }}</span>
         </h3>
@@ -142,7 +142,7 @@ new class extends Component
         @isset($messages)
             @forelse ($messages as $msg)
                 <div data-server-id="{{ $msg['id'] }}" data-mine="{{ $msg['mine'] ? '1' : '0' }}" class="flex {{ $msg['mine'] ? 'justify-end' : 'justify-start' }}">
-                    <div class="max-w-[80%] rounded-lg px-4 py-2 text-sm
+                    <div class="max-w-[80%] rounded-xl px-4 py-2 text-sm
                                 {{ $msg['mine'] ? 'bg-primary text-primary-content' : 'bg-base-200 text-base-content' }}">
                         @if (! $msg['mine'])
                             <div class="text-xs font-semibold mb-1 opacity-70">
@@ -198,12 +198,12 @@ new class extends Component
                 placeholder="Type a message…"
                 maxlength="2000"
                 autocomplete="off"
-                class="input input-bordered input-sm flex-1 focus:outline-none focus:border-primary"
+                class="input input-bordered input-sm h-9 text-[13px] bg-base-200/50 flex-1 focus:outline-none focus:border-primary"
             >
             <button
                 type="submit"
                 wire:loading.attr="disabled"
-                class="btn btn-primary btn-sm"
+                class="btn btn-primary btn-sm h-9 px-4"
             >
                 Send
             </button>

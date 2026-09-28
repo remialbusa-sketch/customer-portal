@@ -60,7 +60,7 @@ new class extends Component
     class="bg-base-100 shadow sm:rounded-2xl flex flex-col h-[640px] border border-base-300/70"
 >
     <div class="px-6 py-4 border-b border-base-300/70 flex items-center justify-between">
-        <h3 class="text-base font-semibold text-base-content">
+        <h3 class="text-[15px] font-semibold text-base-content">
             Internal notes
         </h3>
         <span class="flex items-center gap-1.5 text-xs text-base-content/60">
@@ -81,7 +81,7 @@ new class extends Component
         x-ref="log"
     >
         <template x-for="note in notes" :key="note.id">
-            <article class="rounded-md border border-warning/25 bg-warning/5 px-4 py-3">
+            <article class="rounded-xl border border-warning/25 bg-warning/5 px-4 py-3">
                 <header class="flex items-center justify-between text-xs text-base-content/60">
                     <span class="font-medium text-base-content" x-text="note.author_name"></span>
                     <time
@@ -114,7 +114,7 @@ new class extends Component
             rows="3"
             maxlength="5000"
             placeholder="Add an internal note (visible to TSP only)..."
-            class="textarea textarea-bordered block w-full text-sm focus:outline-none focus:border-warning"
+            class="textarea textarea-bordered block w-full text-sm bg-base-200/50 focus:outline-none focus:border-warning"
         ></textarea>
         <div class="mt-2 flex justify-end">
             <button
