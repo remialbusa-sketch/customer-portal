@@ -82,7 +82,10 @@ class CustomerDashboardTest extends TestCase
             // Avoid the apostrophe: assertSee HTML-escapes its needle,
             // and the banner contains a raw ' in the response body.
             ->assertSee('reach the ticket system')
-            // Zero stat cards in the degrade path.
-            ->assertSee('New service request');
+            // New-design assertions: stat cards, table panel, side panels.
+            ->assertSee('My Tickets')
+            ->assertSee('Recent Activity')
+            ->assertSee('Quick Actions')
+            ->assertSee('Awaiting Info');
     }
 }
