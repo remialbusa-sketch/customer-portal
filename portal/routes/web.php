@@ -18,8 +18,10 @@ Route::view('/', 'welcome');
 Route::middleware(['auth'])->get('/tickets/go', [\App\Http\Controllers\TicketSearchController::class, 'go'])
     ->name('tickets.go');
 
-// Static Help & Support page (nav help icon + dashboard actions).
-Route::view('/help', 'help')->middleware(['auth'])->name('help');
+// Static Help & Support page (nav help icon + dashboard actions +
+// guest sign-in top bar). Public: content is generic guidance and
+// role-gated sections default to the customer view for guests.
+Route::view('/help', 'help')->name('help');
 
 // Offline fallback page. Served from the service worker's cache when a
 // navigation fails while the device is offline (see public/sw.js). It
