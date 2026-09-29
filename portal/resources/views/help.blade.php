@@ -1,8 +1,9 @@
 {{-- =============================================================
      Help & Support — static page, no backend. Linked from the
      nav help icon and the customer dashboard Quick Actions.
-     Sections are role-aware (customers see customer guides,
-     TSPs see technician guides). FAQ search filters client-side.
+     Sections are strictly role-assigned (customers, technicians,
+     administrators). FAQ toggles use label semantics so the
+     arrow always works regardless of collapse CSS internals.
      ============================================================= --}}
 <x-app-layout>
     <x-slot name="header">
@@ -21,11 +22,19 @@
 
     @php
         $role = auth()->user()->role ?? 'customer';
-        $isTsp = in_array($role, ['fse', 'its', 'manager', 'admin'], true);
+        // Strict audience map — each role sees only the guides
+        // written for it. Customers never see technician internals,
+        // technicians don't get customer onboarding, and admins get
+        // their own operations guides.
+        $audience = match ($role) {
+            'customer' => 'customer',
+            'fse', 'its', 'manager' => 'tsp',
+            default => 'admin',
+        };
         $sections = [
             [
                 'title' => 'Getting started',
-                'roles' => ['all'],
+                'roles' => ['customer'],
                 'faqs' => [
                     ['q' => 'How do I submit a service request?', 'a' => 'Use the New Ticket button on your dashboard. Describe the problem, pick the affected machine and brand, and submit — a field engineer in your region will be notified. If you already have an open ticket with the same subject, the form will warn you first so duplicates stay out of the queue.'],
                     ['q' => 'How do I track my ticket?', 'a' => 'Open My Tickets on your dashboard and select the ticket to see its timeline, status changes, assigned technician, and messages. Use the search box, tabs, and filters to find older tickets.'],
@@ -34,7 +43,7 @@
             ],
             [
                 'title' => 'Ticket statuses',
-                'roles' => ['all'],
+                'roles' => ['customer', 'tsp'],
                 'faqs' => [
                     ['q' => 'What do the ticket statuses mean?', 'a' => 'Open: received, awaiting a technician. In Progress: work has started. Awaiting Info: the technician needs something from you — reply on the ticket. Resolved: work is complete and verified.'],
                     ['q' => 'Why is my ticket read-only?', 'a' => 'Resolved tickets lock the chat so the record stays final. If the issue is back, submit a new service request referencing the old ticket number.'],
@@ -42,7 +51,7 @@
                 ],
             ],
             [
-                'title' => 'For technicians — claiming & transfers',
+                'title' => 'Claiming & transfers',
                 'roles' => ['tsp'],
                 'faqs' => [
                     ['q' => 'How do I claim a ticket?', 'a' => 'Open the Available tickets panel on your dashboard, review the ticket, and press Claim. The ticket moves into My tickets and the customer is notified. Claiming writes your assignment to Monday.com.'],
@@ -51,7 +60,7 @@
                 ],
             ],
             [
-                'title' => 'For technicians — service reports',
+                'title' => 'Service reports',
                 'roles' => ['tsp'],
                 'faqs' => [
                     ['q' => 'How do I file a service report (TSR)?', 'a' => 'Open the ticket and choose Create service report. Work through the three steps — equipment and time, work details, signatures — then submit. The report saves on the portal first and mirrors to Monday.com right after.'],
@@ -62,8 +71,19 @@
                 ],
             ],
             [
+                'title' => 'Administration',
+                'roles' => ['admin'],
+                'faqs' => [
+                    ['q' => 'Where do I see overall performance?', 'a' => 'The KPI dashboard (your home page) summarizes ticket volumes, response activity, and service-report output across regions.'],
+                    ['q' => 'How do account-deletion requests work?', 'a' => 'Customers and technicians file deletion requests from their profile. Superadmins review them in the deletion-requests inbox and approve or reject each one — approvals remove the account, rejections keep it with no change.'],
+                    ['q' => 'A TSP cannot claim tickets. What do I check?', 'a' => 'First, their account needs a monday_id linking them to Monday.com — without it, claiming is blocked with an on-screen warning. Second, they need a region set, or the Available pool stays empty for them.'],
+                    ['q' => 'A TSR is stuck in sync error. What now?', 'a' => 'Open the report to read the sync error. Transient Monday.com outages clear on Retry. If signatures failed to upload, the monday:reupload-signatures artisan command retries just the files. If the source ticket was deleted on Monday, Discard the row — it stays in the database for audit.'],
+                    ['q' => 'How do portal users stay in sync with Monday.com?', 'a' => 'The monday:sync-users artisan command reconciles portal accounts against the Monday.com boards. Run it after personnel changes so new technicians can log in and removed ones lose access.'],
+                ],
+            ],
+            [
                 'title' => 'Account & password',
-                'roles' => ['all'],
+                'roles' => ['customer', 'tsp', 'admin'],
                 'faqs' => [
                     ['q' => 'I forgot my password. What do I do?', 'a' => 'Use the Forgot password link on the login page and follow the emailed reset link.'],
                     ['q' => 'Why does the bell say I use a temporary password?', 'a' => 'Your account still logs in with the default password. Open the notification bell and choose Set password now to pick your own. Set up later hides the reminder until your next session.'],
@@ -72,13 +92,14 @@
             ],
             [
                 'title' => 'Notifications',
-                'roles' => ['all'],
+                'roles' => ['customer', 'tsp', 'admin'],
                 'faqs' => [
                     ['q' => 'What does the notification bell badge count?', 'a' => 'Everything needing your attention: new claimable tickets (technicians), ticket status changes, failed report syncs, transfer requests, and the temporary-password reminder. Open an item to jump straight to it — opening marks it read.'],
                     ['q' => 'Do notifications arrive instantly?', 'a' => 'When the connection supports it, yes — otherwise the bell refreshes on its own about every minute. Nothing is lost in between; the badge counts unread items stored on the portal.'],
                 ],
             ],
         ];
+        $fi = 0;
     @endphp
 
     <div class="py-2" x-data="{ q: '' }">
@@ -93,20 +114,21 @@
             </div>
 
             @foreach ($sections as $section)
-                @if (! in_array('all', $section['roles']) && ! ($isTsp && in_array('tsp', $section['roles'])))
+                @if (! in_array($audience, $section['roles']))
                     @continue
                 @endif
                 <section>
                     <h3 class="text-[15px] font-semibold text-base-content mb-3" x-show="!q">{{ $section['title'] }}</h3>
                     <div class="space-y-3">
                         @foreach ($section['faqs'] as $faq)
+                            @php $fi++; $fid = 'faq-' . $fi; @endphp
                             <div class="collapse collapse-arrow rounded-2xl bg-base-100 border border-base-300/70 shadow-sm"
                                  x-show="!q || $el.dataset.search.includes(q.toLowerCase())"
                                  data-search="{{ strtolower($faq['q'] . ' ' . $faq['a']) }}">
-                                <input type="checkbox" class="peer" checked="checked" />
-                                <div class="collapse-title text-sm font-semibold text-base-content">
+                                <input type="checkbox" id="{{ $fid }}" class="peer" checked="checked" />
+                                <label for="{{ $fid }}" class="collapse-title text-sm font-semibold text-base-content cursor-pointer">
                                     {{ $faq['q'] }}
-                                </div>
+                                </label>
                                 <div class="collapse-content text-sm text-base-content/70 leading-relaxed">
                                     <p>{{ $faq['a'] }}</p>
                                 </div>
