@@ -95,3 +95,31 @@
     0% { background-position: 110% 0; }
     35%, 100% { background-position: -10% 0; }
 }
+
+/* =============================================================
+   Global navigation progress bar (brand gradient slide).
+   Toggled by the inline script in layouts/app.blade.php on
+   Livewire navigate events; window.portalProgress exposes
+   show()/hide() for anything else that needs it.
+   ============================================================= */
+#portal-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    width: 100%;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    background: linear-gradient(90deg, #0A2540, #2E9B3F, #3FA7E0, #0A2540);
+    background-size: 200% 100%;
+    transition: opacity 0.25s ease-out;
+}
+#portal-progress.is-active {
+    opacity: 1;
+    animation: portal-progress-slide 1.1s linear infinite;
+}
+@keyframes portal-progress-slide {
+    from { background-position: 200% 0; }
+    to   { background-position: -100% 0; }
+}

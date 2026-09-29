@@ -19,6 +19,9 @@
     </head>
     <body class="font-sans antialiased text-base-content bg-[#F5F6F9] h-full">
 
+        {{-- Global navigation progress (same as app layout). --}}
+        <div id="portal-progress" aria-hidden="true"></div>
+
         {{-- Slim top bar (Figma sign-in frame): brand left, help access right. --}}
         <header class="bg-base-100 border-b border-base-300/70">
             <div class="max-w-7xl mx-auto px-4 sm:px-8 h-[68px] flex items-center justify-between gap-3">
@@ -152,5 +155,33 @@
         </main>
 
         @stack('scripts')
+
+        <script>
+            // Global navigation progress (same as app layout).
+            (function () {
+                var bar = document.getElementById('portal-progress');
+                if (! bar) return;
+                var failsafe = null;
+                function show() {
+                    bar.classList.add('is-active');
+                    if (failsafe) clearTimeout(failsafe);
+                    failsafe = setTimeout(hide, 10000);
+                }
+                function hide() {
+                    bar.classList.remove('is-active');
+                    if (failsafe) { clearTimeout(failsafe); failsafe = null; }
+                }
+                window.portalProgress = { show: show, hide: hide };
+                function bind() {
+                    if (! window.Livewire) {
+                        setTimeout(bind, 200);
+                        return;
+                    }
+                    document.addEventListener('livewire:navigating', show);
+                    document.addEventListener('livewire:navigated', hide);
+                }
+                bind();
+            })();
+        </script>
     </body>
 </html>

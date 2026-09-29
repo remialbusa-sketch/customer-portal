@@ -32,6 +32,9 @@
         @livewireStyles
     </head>
     <body class="font-sans antialiased bg-base-200 text-base-content">
+        {{-- Global navigation progress (brand gradient slide). Shown
+             during Livewire SPA navigations; see script below. --}}
+        <div id="portal-progress" aria-hidden="true"></div>
         <div class="min-h-screen">
             <livewire:layout.navigation />
 
@@ -64,6 +67,36 @@
              `Livewire` (e.g. calls `Livewire.dispatch(...)`) runs
              after the runtime is available. --}}
         @livewireScripts
+
+        <script>
+            // Global navigation progress: slide the brand bar while a
+            // Livewire SPA navigation is in flight. Failsafe hides it
+            // after 10s so a dropped event can never strand it on.
+            (function () {
+                var bar = document.getElementById('portal-progress');
+                if (! bar) return;
+                var failsafe = null;
+                function show() {
+                    bar.classList.add('is-active');
+                    if (failsafe) clearTimeout(failsafe);
+                    failsafe = setTimeout(hide, 10000);
+                }
+                function hide() {
+                    bar.classList.remove('is-active');
+                    if (failsafe) { clearTimeout(failsafe); failsafe = null; }
+                }
+                window.portalProgress = { show: show, hide: hide };
+                function bind() {
+                    if (! window.Livewire) {
+                        setTimeout(bind, 200);
+                        return;
+                    }
+                    document.addEventListener('livewire:navigating', show);
+                    document.addEventListener('livewire:navigated', hide);
+                }
+                bind();
+            })();
+        </script>
 
         @stack('scripts')
     </body>
