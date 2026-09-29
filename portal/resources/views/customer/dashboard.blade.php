@@ -99,11 +99,11 @@
                                     <svg class="w-3 h-3 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                                 </button>
                                 <ul class="dropdown-content menu menu-xs p-1.5 shadow-lg bg-base-100 rounded-box w-44 z-20 border border-base-300/60">
-                                    <li><a @click="toggleStatus('open')" :class="{ active: statusFilter.includes('open') }">Open</a></li>
-                                    <li><a @click="toggleStatus('in_progress')" :class="{ active: statusFilter.includes('in_progress') }">In Progress</a></li>
-                                    <li><a @click="toggleStatus('awaiting')" :class="{ active: statusFilter.includes('awaiting') }">Awaiting Info</a></li>
-                                    <li><a @click="toggleStatus('resolved')" :class="{ active: statusFilter.includes('resolved') }">Resolved</a></li>
-                                    <li><a @click="toggleStatus('uncategorised')" :class="{ active: statusFilter.includes('uncategorised') }">Uncategorised</a></li>
+                                    <li><button type="button" @click="toggleStatus('open')" :class="{ active: statusFilter.includes('open') }" class="w-full text-left">Open</button></li>
+                                    <li><button type="button" @click="toggleStatus('in_progress')" :class="{ active: statusFilter.includes('in_progress') }" class="w-full text-left">In Progress</button></li>
+                                    <li><button type="button" @click="toggleStatus('awaiting')" :class="{ active: statusFilter.includes('awaiting') }" class="w-full text-left">Awaiting Info</button></li>
+                                    <li><button type="button" @click="toggleStatus('resolved')" :class="{ active: statusFilter.includes('resolved') }" class="w-full text-left">Resolved</button></li>
+                                    <li><button type="button" @click="toggleStatus('uncategorised')" :class="{ active: statusFilter.includes('uncategorised') }" class="w-full text-left">Uncategorised</button></li>
                                 </ul>
                             </div>
 
@@ -114,7 +114,7 @@
                                 </button>
                                 <ul class="dropdown-content menu menu-xs p-1.5 shadow-lg bg-base-100 rounded-box w-40 z-20 border border-base-300/60">
                                     @foreach (['Critical', 'High', 'Medium', 'Low'] as $p)
-                                        <li><a @click="togglePriority('{{ $p }}')" :class="{ active: priorityFilter.includes('{{ $p }}') }">{{ $p }}</a></li>
+                                        <li><button type="button" @click="togglePriority('{{ $p }}')" :class="{ active: priorityFilter.includes('{{ $p }}') }" class="w-full text-left">{{ $p }}</button></li>
                                     @endforeach
                                 </ul>
                             </div>
