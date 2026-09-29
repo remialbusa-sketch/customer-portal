@@ -103,7 +103,7 @@
                             <div class="collapse collapse-arrow rounded-2xl bg-base-100 border border-base-300/70 shadow-sm"
                                  x-show="!q || $el.dataset.search.includes(q.toLowerCase())"
                                  data-search="{{ strtolower($faq['q'] . ' ' . $faq['a']) }}">
-                                <input type="checkbox" class="peer" />
+                                <input type="checkbox" class="peer" checked="checked" />
                                 <div class="collapse-title text-sm font-semibold text-base-content">
                                     {{ $faq['q'] }}
                                 </div>
