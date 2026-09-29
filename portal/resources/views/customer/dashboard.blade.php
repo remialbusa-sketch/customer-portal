@@ -14,7 +14,7 @@
 
     {{-- ── Page header ── --}}
     <x-slot name="header">
-        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+        <div class="animate-enter flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div>
                 <p class="text-[11px] font-medium uppercase tracking-wider text-base-content/50">
                     {{ $account }}
@@ -62,7 +62,7 @@
                     ['label' => 'Awaiting Info', 'value' => $stats['awaiting'],  'hint' => 'Pending your reply', 'tone' => 'text-accent'],
                     ['label' => 'Resolved',    'value' => $stats['resolved'],    'hint' => 'Closed tickets',     'tone' => 'text-success'],
                 ] as $card)
-                    <div class="rounded-2xl bg-base-100 border border-base-300/70 shadow-sm px-5 py-4">
+                    <div class="animate-enter rounded-2xl bg-base-100 border border-base-300/70 shadow-sm px-5 py-4" style="animation-delay: {{ 60 + $loop->index * 60 }}ms;">
                         <div class="flex items-center justify-between">
                             <p class="text-[10px] font-medium uppercase tracking-wider text-base-content/50">{{ $card['label'] }}</p>
                             <span class="text-base-content/20 text-sm" aria-hidden="true">›</span>

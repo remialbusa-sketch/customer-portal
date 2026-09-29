@@ -23,7 +23,7 @@
     @endphp
 
     <x-slot:header>
-        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+        <div class="animate-enter flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div class="min-w-0">
                 <p class="text-[11px] font-medium uppercase tracking-wider text-base-content/50">
                     Service Report

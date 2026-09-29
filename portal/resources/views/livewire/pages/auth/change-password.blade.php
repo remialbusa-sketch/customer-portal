@@ -33,7 +33,7 @@ new #[Layout('layouts.guest')] class extends Component
     }
 }; ?>
 
-<div class="rounded-2xl bg-base-100 border border-base-300/70 shadow-[0_12px_36px_0_rgba(30,36,64,0.07)] px-9 py-8">
+<div class="animate-enter rounded-2xl bg-base-100 border border-base-300/70 shadow-[0_12px_36px_0_rgba(30,36,64,0.07)] px-9 py-8">
     <div class="mb-6">
         <h2 class="font-display text-2xl font-bold text-brand-navy">Set a password of your own</h2>
         <p class="mt-1 text-sm text-brand-slate">
