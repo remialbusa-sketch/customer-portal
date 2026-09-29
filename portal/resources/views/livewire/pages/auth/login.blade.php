@@ -28,16 +28,16 @@ new #[Layout('layouts.guest')] class extends Component
     }
 }; ?>
 
-<div class="rounded-2xl bg-base-100 border border-base-300/70 shadow-[0_12px_36px_0_rgba(30,36,64,0.07)] px-9 py-8">
+<div class="animate-enter rounded-2xl bg-base-100 border border-base-300/70 shadow-[0_12px_36px_0_rgba(30,36,64,0.07)] px-9 py-8">
     {{-- Heading --}}
-    <div class="mb-5">
+    <div class="animate-enter animate-enter-1 mb-5">
         <h2 class="font-bold text-[28px] text-base-content leading-tight">Welcome back</h2>
         <p class="mt-1.5 text-sm text-base-content/60 leading-relaxed">Sign in to manage tickets and see the latest service updates.</p>
     </div>
 
     <x-auth-session-status class="mb-4" :status="session('status')" />
 
-    <form wire:submit="login" class="space-y-4">
+    <form wire:submit="login" class="animate-enter animate-enter-2 space-y-4">
         <div>
             <x-input-label for="email" :value="__('Work email')" />
             <div class="relative mt-1.5">
@@ -81,10 +81,10 @@ new #[Layout('layouts.guest')] class extends Component
             @endif
         </div>
 
-        <x-primary-button class="w-full justify-center !h-12 !text-[13px]" wire:loading.attr="disabled" wire:target="login">
+        <x-primary-button class="w-full justify-center !h-12 !text-[13px] group" wire:loading.attr="disabled" wire:target="login">
             <span wire:loading.remove wire:target="login" class="inline-flex items-center gap-2">
                 {{ __('Continue to ticket dashboard') }}
-                <svg class="w-[15px] h-[15px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+                <svg class="w-[15px] h-[15px] transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
             </span>
             <span wire:loading wire:target="login" class="inline-flex items-center gap-2">
                 <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -96,7 +96,7 @@ new #[Layout('layouts.guest')] class extends Component
         </x-primary-button>
     </form>
 
-    <div class="mt-5 flex items-center gap-2.5 rounded-lg bg-base-200/60 px-3.5 py-2.5">
+    <div class="animate-enter animate-enter-3 mt-5 flex items-center gap-2.5 rounded-lg bg-base-200/60 px-3.5 py-2.5">
         <svg class="w-[15px] h-[15px] text-success shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         <p class="text-[11px] text-base-content/60">Secure, encrypted access to your organization’s support records.</p>
     </div>

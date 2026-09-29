@@ -7,7 +7,7 @@
      ============================================================= --}}
 <x-app-layout>
     <x-slot name="header">
-        <div>
+        <div class="animate-enter">
             <p class="text-[11px] font-medium uppercase tracking-wider text-base-content/50">
                 Support
             </p>

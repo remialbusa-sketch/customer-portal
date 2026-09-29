@@ -36,7 +36,7 @@ new #[Layout('layouts.guest')] class extends Component
     }
 }; ?>
 
-<div class="rounded-2xl bg-base-100 border border-base-300/70 shadow-[0_12px_36px_0_rgba(30,36,64,0.07)] px-9 py-8 space-y-5">
+<div class="animate-enter rounded-2xl bg-base-100 border border-base-300/70 shadow-[0_12px_36px_0_rgba(30,36,64,0.07)] px-9 py-8 space-y-5">
     <div>
         <p class="text-xs font-semibold tracking-widest uppercase text-base-content/50 mb-1">
             Password recovery
@@ -66,3 +66,4 @@ new #[Layout('layouts.guest')] class extends Component
         </div>
     </form>
 </div>
+

@@ -46,21 +46,24 @@
             <div class="flex items-center justify-center gap-14">
 
                 {{-- Intro panel (desktop only) --}}
-                <aside class="hidden lg:flex flex-col w-full max-w-[584px] rounded-3xl bg-[#EEF0FF] border border-[#E4E6FF] p-10 gap-7" aria-hidden="false">
-                    <div>
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-base-100 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                <aside class="hidden lg:flex flex-col w-full max-w-[584px] rounded-3xl bg-[#EEF0FF] border border-[#E4E6FF] p-10 gap-7 relative overflow-hidden" aria-hidden="false">
+                    {{-- Ambient drifting orbs (decorative, motion-safe). --}}
+                    <div class="absolute -top-20 -right-20 w-72 h-72 rounded-full bg-[#5B5BD6]/10 blur-3xl animate-drift pointer-events-none" aria-hidden="true"></div>
+                    <div class="absolute -bottom-24 -left-16 w-80 h-80 rounded-full bg-[#2E9B3F]/10 blur-3xl animate-drift pointer-events-none" style="animation-delay: -7s;" aria-hidden="true"></div>
+                    <div class="relative">
+                        <span class="animate-enter inline-flex items-center gap-1.5 rounded-full bg-base-100 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
                             Customer support portal
                         </span>
-                        <h1 class="mt-3.5 text-4xl font-bold leading-[1.14] text-base-content">
+                        <h1 class="animate-enter animate-enter-1 mt-3.5 text-4xl font-bold leading-[1.14] text-base-content">
                             One place for every support request.
                         </h1>
-                        <p class="mt-3 text-sm leading-relaxed text-base-content/60">
+                        <p class="animate-enter animate-enter-2 mt-3 text-sm leading-relaxed text-base-content/60">
                             Track tickets, share updates with your service engineer, and get back to work with confidence.
                         </p>
                     </div>
 
-                    <div class="flex gap-5">
+                    <div class="animate-enter animate-enter-2 flex gap-5 relative">
                         <div class="flex items-center gap-3 flex-1">
                             <span class="w-9 h-9 rounded-lg bg-base-100 flex items-center justify-center shrink-0">
                                 <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -82,7 +85,7 @@
                     </div>
 
                     {{-- Decorative product preview (static mock, not live data). --}}
-                    <div class="rounded-2xl bg-base-100 border border-base-300/70 shadow-[0_16px_32px_0_rgba(53,53,165,0.10)] overflow-hidden" aria-hidden="true">
+                    <div class="animate-enter animate-enter-3 relative rounded-2xl bg-base-100 border border-base-300/70 shadow-[0_16px_32px_0_rgba(53,53,165,0.10)] overflow-hidden" aria-hidden="true">
                         <div class="flex items-center justify-between px-4 h-12 border-b border-base-300/70">
                             <div class="flex items-center gap-2">
                                 <span class="w-6 h-6 rounded-md bg-[#EEEEFF] text-primary flex items-center justify-center">
@@ -91,7 +94,10 @@
                                 <span class="text-xs font-semibold text-base-content">Your ticket workspace</span>
                             </div>
                             <span class="flex items-center gap-1.5 text-[10px] text-base-content/60">
-                                <span class="w-[7px] h-[7px] rounded-full bg-success"></span>
+                                <span class="relative flex w-[7px] h-[7px]">
+                                    <span class="absolute inset-0 rounded-full bg-success/40 animate-ping"></span>
+                                    <span class="relative rounded-full w-[7px] h-[7px] bg-success"></span>
+                                </span>
                                 Support online
                             </span>
                         </div>

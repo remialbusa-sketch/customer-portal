@@ -10,7 +10,16 @@ use App\Http\Controllers\Tsp\InternalNoteController as TspInternalNoteController
 use App\Http\Controllers\Tsp\TimeEntryController as TspTimeEntryController;
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'welcome');
+// Landing page removed: guests go straight to sign-in, signed-in
+// users to their home dashboard. (The old welcome view is deleted;
+// post-logout redirects to '/' land on the login form.)
+Route::get('/', function () {
+    if (! auth()->check()) {
+        return redirect()->route('login');
+    }
+
+    return redirect()->route(auth()->user()->homeRoute());
+})->name('home');
 
 // Nav search quick-jump (Figma top nav box). Auth-only; the
 // controller branches by role. Registered BEFORE /tickets/{id}
