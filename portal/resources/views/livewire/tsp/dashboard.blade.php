@@ -217,10 +217,10 @@
                         <svg class="w-3 h-3 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
                     <ul class="dropdown-content menu menu-xs p-1.5 shadow-lg bg-base-100 rounded-box w-40 z-20 border border-base-300/60">
-                        <li><a wire:click="toggleStatusFilter('open')">Open</a></li>
-                        <li><a wire:click="toggleStatusFilter('in_progress')">In progress</a></li>
-                        <li><a wire:click="toggleStatusFilter('awaiting')">Awaiting</a></li>
-                        <li><a wire:click="toggleStatusFilter('resolved')">Resolved</a></li>
+                        <li><button type="button" wire:click="toggleStatusFilter('open')" class="w-full text-left">Open</button></li>
+                        <li><button type="button" wire:click="toggleStatusFilter('in_progress')" class="w-full text-left">In progress</button></li>
+                        <li><button type="button" wire:click="toggleStatusFilter('awaiting')" class="w-full text-left">Awaiting</button></li>
+                        <li><button type="button" wire:click="toggleStatusFilter('resolved')" class="w-full text-left">Resolved</button></li>
                     </ul>
                 </div>
 

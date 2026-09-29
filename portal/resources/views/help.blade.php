@@ -125,7 +125,7 @@
                             <div class="collapse collapse-arrow rounded-2xl bg-base-100 border border-base-300/70 shadow-sm"
                                  x-show="!q || $el.dataset.search.includes(q.toLowerCase())"
                                  data-search="{{ strtolower($faq['q'] . ' ' . $faq['a']) }}">
-                                <input type="checkbox" id="{{ $fid }}" class="peer" checked="checked" />
+                                <input type="checkbox" id="{{ $fid }}" class="peer" />
                                 <label for="{{ $fid }}" class="collapse-title text-sm font-semibold text-base-content cursor-pointer">
                                     {{ $faq['q'] }}
                                 </label>
