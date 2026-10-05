@@ -693,7 +693,7 @@
                  class="fixed inset-0 z-[60] items-center justify-center bg-base-300/60 backdrop-blur-sm"
                  role="status" aria-label="Claiming ticket">
                 <div class="animate-enter rounded-2xl bg-base-100 border border-base-300/70 shadow-xl px-8 py-6 flex flex-col items-center gap-2 max-w-xs text-center">
-                    <x-animated-logo class="w-[160px]" />
+                    <x-mc-logo width="160px" />
                     <p class="text-sm font-semibold text-base-content mt-1">Claiming ticket…</p>
                     <p class="text-xs text-base-content/60">Writing your assignment to Monday.com.</p>
                 </div>
