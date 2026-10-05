@@ -109,26 +109,16 @@
 }
 
 /* =============================================================
-   Animated logo (strip-reveal + shine sweep). The strips get
-   their background image inline from the component; the shine
-   layer masks itself with the same logo art.
+   <mc-logo> brand element.
+   The logo styles itself inside a shadow root (see
+   resources/js/mc-logo.js), so the only rule the document needs is
+   the no-JS fallback guard: the sibling <img> shipped inside the
+   <x-mc-logo> wrapper stays visible until the custom element is
+   actually defined, then hides. Without it the header logo would be
+   blank whenever the component script is blocked or fails.
    ============================================================= */
-.mc-logo-strip {
-    position: absolute;
-    inset: 0;
-    background-position: center;
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
-    will-change: transform;
-}
-.mc-logo-shine {
-    background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.95) 50%, transparent 58%) no-repeat;
-    background-size: 300% 100%;
-    animation: portal-logo-shine 6s ease-in-out infinite;
-}
-@keyframes portal-logo-shine {
-    0% { background-position: 110% 0; }
-    35%, 100% { background-position: -10% 0; }
+mc-logo:defined ~ .mc-logo-fallback {
+    display: none;
 }
 
 /* =============================================================

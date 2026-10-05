@@ -7,8 +7,10 @@
 //
 //   const echo = window.echo();
 //   echo.private(`ticket.${mondayId}`).listen('.message.sent', (e) => { ... });
+//   - <mc-logo>                  → MC BioTechnical animated brand logo
 
 import { getEcho } from './echo.js';
+import './mc-logo.js';
 import './chat-panel.js';
 import './internal-notes-panel.js';
 import './time-tracker.js';

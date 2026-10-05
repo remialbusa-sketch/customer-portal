@@ -26,7 +26,7 @@
         <header class="bg-base-100 border-b border-base-300/70">
             <div class="max-w-7xl mx-auto px-4 sm:px-8 h-[68px] flex items-center justify-between gap-3">
                 <a href="{{ url('/') }}" class="inline-flex items-center shrink-0" wire:navigate>
-                    <x-animated-logo class="w-[146px]" />
+                    <x-mc-logo width="146px" />
                 </a>
                 <div class="flex items-center gap-3">
                     <div class="hidden sm:flex flex-col items-end gap-0.5 leading-tight">
