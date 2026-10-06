@@ -122,6 +122,53 @@ mc-logo:defined ~ .mc-logo-fallback {
 }
 
 /* =============================================================
+   Boot buffer — the pre-upgrade cover.
+
+   <mc-logo data-boot mode="loader" fullscreen> is server-rendered as
+   the first child of <body>, but a custom element has no styles until
+   the JS bundle upgrades it: before that it is a 0x0 inline box
+   covering nothing. On a slow connection that means the page paints
+   half-finished first and the loader appears only afterwards — the
+   exact opposite of a buffer.
+
+   So give the un-upgraded element a real cover here. These rules are
+   deliberately plain (not :host) and are dropped automatically the
+   moment the shadow root takes over, at which point the element's own
+   `[fullscreen]` :host rules apply. The inline boot script in the
+   layout removes the element regardless, so a failed bundle cannot
+   leave this cover on screen.
+
+   NOTE the !important flags. Tailwind's preflight sits in the `base`
+   layer and this rule is in `utilities`, but the preflight reset for
+   unknown elements plus the UA default `display: inline` otherwise win
+   the cascade here — verified in Chromium, where the rule matches but
+   still computed to `position: static; display: inline` without them.
+   ============================================================= */
+mc-logo[data-boot]:not(:defined) {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    z-index: 2147483000 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    /* --bg from the element's own [fullscreen] theme, so the cover and
+       the upgraded loader are the same colour and the handover between
+       them is invisible. */
+    background: #f7f7f4 !important;
+    transition: opacity 0.25s ease-out !important;
+}
+mc-logo[data-boot]:not(:defined) ~ #portal-progress {
+    /* The progress bar belongs to the page underneath; keep it hidden
+       until the boot cover is gone. */
+    display: none !important;
+}
+
+/* =============================================================
    Global navigation progress bar (brand gradient slide).
    Toggled by the inline script in layouts/app.blade.php on
    Livewire navigate events; window.portalProgress exposes
