@@ -19,6 +19,16 @@
     </head>
     <body class="font-sans antialiased text-base-content bg-[#F5F6F9] h-full">
 
+        {{-- Boot buffer. Same full-screen <mc-logo mode="loader"> as
+             the app layout, so signing in gets the same branded startup
+             instead of a half-painted page. Driven and hard-hidden by
+             resources/js/boot-loader.js; removes itself. --}}
+        <mc-logo data-boot mode="loader" fullscreen nohelix
+                 src="{{ asset('images/brand/mcbio-logo.png') }}"
+                 theme="light"
+                 role="status"
+                 aria-label="Loading the MC BioTechnical Solutions portal"></mc-logo>
+
         {{-- Global navigation progress (same as app layout). --}}
         <div id="portal-progress" aria-hidden="true"></div>
 
@@ -159,6 +169,97 @@
         <script>
             // Global navigation progress (same as app layout).
             (function () {
+                // ---- Boot buffer -----------------------------------
+                // Same full-screen <mc-logo data-boot> as the app layout.
+                // See the app layout for why this is inline here rather
+                // than in a head module.
+                (function () {
+                    var boot = document.querySelector('mc-logo[data-boot]');
+                    if (! boot) return;
+                    // Guard THIS element rather than a global. The
+                    // signed-in handoff (guest layout -> app layout over
+                    // wire:navigate) installs a brand-new boot element
+                    // while the previous overlay's controller is still on
+                    // window; a global guard would strand it on screen.
+                    if (boot.dataset.bootDriven === '1') return;
+                    boot.dataset.bootDriven = '1';
+
+                    // SPA continuation: never flash a full-screen boot
+                    // screen for an in-app link click.
+                    if (document.documentElement.dataset.portalNavigated === '1') {
+                        boot.remove();
+                        return;
+                    }
+
+                    var CEILING = 8000;
+                    var MIN_VISIBLE = window.matchMedia
+                        && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                        ? 160 : 420;
+
+                    var startedAt = performance.now();
+                    var settled = false;
+                    var timers = [];
+                    function after(ms, fn) { timers.push(setTimeout(fn, ms)); }
+                    function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+
+                    function complete() {
+                        if (settled) return;
+                        settled = true;
+                        clearTimers();
+                        var wait = Math.max(0, MIN_VISIBLE - (performance.now() - startedAt));
+                        after(wait, function () {
+                            // finish() only exists once the custom element
+                            // has been upgraded. If the bundle never
+                            // arrived, the pre-upgrade CSS cover is still
+                            // on screen — take it down directly.
+                            if (typeof boot.finish === 'function') {
+                                try { boot.finish(); return; } catch (e) { /* fall through */ }
+                            }
+                            boot.remove();
+                        });
+                    }
+
+                    var pending = 0;
+                    var expected = 0;
+                    function signal() {
+                        if (settled) return;
+                        pending += 1;
+                        if (pending >= expected) complete();
+                    }
+
+                    expected += 1;
+                    if (document.readyState === 'complete') signal();
+                    else window.addEventListener('load', signal, { once: true });
+
+                    if (document.fonts && document.fonts.ready) {
+                        expected += 1;
+                        document.fonts.ready.then(signal, signal);
+                    }
+
+                    expected += 1;
+                    if (window.Livewire) signal();
+                    else document.addEventListener('livewire:init', signal, { once: true });
+
+                    after(CEILING, function () {
+                        if (settled) return;
+                        console.warn('[portal-boot] readiness never settled; forcing hide');
+                        settled = true;
+                        clearTimers();
+                        if (typeof boot.hide === 'function') {
+                            try { boot.hide(); } catch (e) { boot.remove(); }
+                        } else {
+                            boot.remove();
+                        }
+                    });
+
+                    after(CEILING + 1500, function () {
+                        if (boot.isConnected) boot.remove();
+                    });
+
+                    window.portalBoot = { element: boot, finish: complete };
+                })();
+
+                // ---- Global navigation progress --------------------
                 var bar = document.getElementById('portal-progress');
                 if (! bar) return;
                 var failsafe = null;
@@ -172,13 +273,16 @@
                     if (failsafe) { clearTimeout(failsafe); failsafe = null; }
                 }
                 window.portalProgress = { show: show, hide: hide };
+
                 function bind() {
                     if (! window.Livewire) {
                         setTimeout(bind, 200);
                         return;
                     }
                     document.addEventListener('livewire:navigating', show);
-                    document.addEventListener('livewire:navigated', hide);
+                    document.addEventListener('livewire:navigated', function () {
+                        document.documentElement.dataset.portalNavigated = '1';
+                    });
                 }
                 bind();
             })();

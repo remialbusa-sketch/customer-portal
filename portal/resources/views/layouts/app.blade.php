@@ -32,6 +32,18 @@
         @livewireStyles
     </head>
     <body class="font-sans antialiased bg-base-200 text-base-content">
+        {{-- Boot buffer. Full-screen <mc-logo mode="loader"> covering
+             startup until the document, webfonts, and Livewire are all
+             ready. First child of <body> so it paints before anything
+             else. resources/js/boot-loader.js decides when to finish()
+             it and hard-hides it at a ceiling so it can never strand
+             the user. It removes itself; nothing to clean up here. --}}
+        <mc-logo data-boot mode="loader" fullscreen nohelix
+                 src="{{ asset('images/brand/mcbio-logo.png') }}"
+                 theme="light"
+                 role="status"
+                 aria-label="Loading the MC BioTechnical Solutions portal"></mc-logo>
+
         {{-- Global navigation progress (brand gradient slide). Shown
              during Livewire SPA navigations; see script below. --}}
         <div id="portal-progress" aria-hidden="true"></div>
@@ -73,6 +85,118 @@
             // Livewire SPA navigation is in flight. Failsafe hides it
             // after 10s so a dropped event can never strand it on.
             (function () {
+                // ---- Boot buffer -----------------------------------
+                // The full-screen <mc-logo data-boot> in the body. This
+                // must be an inline body script (not a module in the
+                // head): a Livewire SPA navigation swaps <body> and
+                // re-runs inline scripts, but never re-runs an already
+                // -evaluated head module. In a module the overlay would
+                // appear on every in-app link click with no controller
+                // left to remove it.
+                (function () {
+                    var boot = document.querySelector('mc-logo[data-boot]');
+                    if (! boot) return;
+                    // Guard THIS element, not a global. A guard on
+                    // window.portalBoot breaks the signed-in handoff:
+                    // the login page drives its own overlay, then the
+                    // wire:navigate redirect to /dashboard swaps in the
+                    // app layout with a NEW boot element while
+                    // window.portalBoot is still set from before — the
+                    // overlay would then never be removed.
+                    if (boot.dataset.bootDriven === '1') return;
+                    boot.dataset.bootDriven = '1';
+
+                    // A SPA navigation re-runs this script against a
+                    // fresh boot element. No full-screen flash for an
+                    // in-app link click — remove it and return.
+                    if (document.documentElement.dataset.portalNavigated === '1') {
+                        boot.remove();
+                        return;
+                    }
+
+                    // Hard ceiling. This is the guarantee that matters:
+                    // whatever the readiness signals do, the overlay is
+                    // gone within ceilingMs.
+                    var CEILING = 8000;
+                    // Never flash: hold briefly even on an instant load.
+                    var MIN_VISIBLE = window.matchMedia
+                        && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                        ? 160 : 420;
+
+                    var startedAt = performance.now();
+                    var settled = false;
+                    var timers = [];
+                    function after(ms, fn) { timers.push(setTimeout(fn, ms)); }
+                    function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+
+                    function complete() {
+                        if (settled) return;
+                        settled = true;
+                        clearTimers();
+                        var wait = Math.max(0, MIN_VISIBLE - (performance.now() - startedAt));
+                        after(wait, function () {
+                            // finish() only exists once the custom element
+                            // has been upgraded. If the bundle never
+                            // arrived, the pre-upgrade CSS cover is still
+                            // on screen — take it down directly.
+                            if (typeof boot.finish === 'function') {
+                                try { boot.finish(); return; } catch (e) { /* fall through */ }
+                            }
+                            boot.remove();
+                        });
+                    }
+
+                    var pending = 0;
+                    var expected = 0;
+                    function signal() {
+                        if (settled) return;
+                        pending += 1;
+                        if (pending >= expected) complete();
+                    }
+
+                    // 1. document + stylesheets applied
+                    expected += 1;
+                    if (document.readyState === 'complete') signal();
+                    else window.addEventListener('load', signal, { once: true });
+
+                    // 2. webfonts settled (Inter / Plus Jakarta come from
+                    //    a third-party host and are a visible source of
+                    //    first-paint jank)
+                    if (document.fonts && document.fonts.ready) {
+                        expected += 1;
+                        document.fonts.ready.then(signal, signal);
+                    }
+
+                    // 3. Livewire booted. Until this fires, buttons and
+                    //    forms in this app are inert.
+                    expected += 1;
+                    if (window.Livewire) signal();
+                    else document.addEventListener('livewire:init', signal, { once: true });
+
+                    after(CEILING, function () {
+                        if (settled) return;
+                        console.warn('[portal-boot] readiness never settled; forcing hide');
+                        settled = true;
+                        clearTimers();
+                        // hide() animates out; if the element never
+                        // upgraded, remove() instead.
+                        if (typeof boot.hide === 'function') {
+                            try { boot.hide(); } catch (e) { boot.remove(); }
+                        } else {
+                            boot.remove();
+                        }
+                    });
+
+                    // Last resort if the element's own boot failed and
+                    // hide() never completes: remove it outright.
+                    after(CEILING + 1500, function () {
+                        if (boot.isConnected) boot.remove();
+                    });
+
+                    window.portalBoot = { element: boot, finish: complete };
+                })();
+
+                // ---- Global navigation progress --------------------
                 var bar = document.getElementById('portal-progress');
                 if (! bar) return;
                 var failsafe = null;
@@ -86,13 +210,19 @@
                     if (failsafe) { clearTimeout(failsafe); failsafe = null; }
                 }
                 window.portalProgress = { show: show, hide: hide };
+
                 function bind() {
                     if (! window.Livewire) {
                         setTimeout(bind, 200);
                         return;
                     }
                     document.addEventListener('livewire:navigating', show);
-                    document.addEventListener('livewire:navigated', hide);
+                    // Marks this document as SPA-continued. Set inside the
+                    // listener (not eagerly) so a hard load is not
+                    // mistaken for a continuation.
+                    document.addEventListener('livewire:navigated', function () {
+                        document.documentElement.dataset.portalNavigated = '1';
+                    });
                 }
                 bind();
             })();
